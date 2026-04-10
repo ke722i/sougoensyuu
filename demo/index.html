@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIディベートバトル</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&family=Kosugi+Maru&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="container">
+
+<!-- タイトル -->
+<div id="titleScreen" class="screen active">
+  <div class="title">
+    <h1>AIディベートバトル</h1>
+    <div class="subtitle">テーマを選択</div>
+  </div>
+
+  <button onclick="showStance('努力は才能に勝てる？')">努力は才能に勝てる？</button>
+  <button onclick="showStance('AIは人間を超えるべき？')">AIは人間を超えるべき？</button>
+  <button onclick="showStance('お金と幸せどっちが大事？')">お金と幸せどっちが大事？</button>
+</div>
+
+<!-- 主張選択 -->
+<div id="stanceScreen" class="screen">
+  <div class="title">
+    <h2 id="stanceTheme"></h2>
+    <div class="subtitle">あなたの主張を選択</div>
+  </div>
+
+  <div id="stanceButtons"></div>
+
+  <button class="back-btn" onclick="showScreen('titleScreen')">← 戻る</button>
+</div>
+
+<!-- ゲーム -->
+<div id="gameScreen" class="screen">
+
+  <div class="top-bar">
+    <div id="themeText"></div>
+    <div id="turnText"></div>
+  </div>
+
+  <button class="back-btn" onclick="backToTitle()">← タイトルへ戻る</button>
+
+  <div id="chat" class="chat"></div>
+
+  <div class="input-area">
+    <input type="text" id="userInput" placeholder="あなたの意見を入力">
+    <button onclick="sendMessage()">送信</button>
+  </div>
+
+</div>
+
+<!-- 結果 -->
+<div id="resultScreen" class="screen">
+  <div class="result">
+    <h2>結果</h2>
+    <div id="scoreText"></div>
+    <div id="commentText"></div>
+
+    <button onclick="restart()">もう一度</button>
+  </div>
+</div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
