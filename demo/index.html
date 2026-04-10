@@ -4,191 +4,71 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AIディベートバトル</title>
-
-<!-- フォント -->
-<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&family=Kosugi+Maru&display=swap" rel="stylesheet">
-
+ 
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&family=Kosugi+Maru&display=swap%22 rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-
+ 
 <body>
-
+ 
 <div class="container">
-
-<!-- タイトル画面 -->
+ 
+<!-- タイトル -->
 <div id="titleScreen" class="screen active">
   <div class="title">
     <h1>AIディベートバトル</h1>
     <div class="subtitle">テーマを選択</div>
   </div>
-
-  <button onclick="selectTheme('努力は才能に勝てる？')">努力は才能に勝てる？</button>
-  <button onclick="selectTheme('AIは人間を超えるべき？')">AIは人間を超えるべき？</button>
-  <button onclick="selectTheme('お金と幸せどっちが大事？')">お金と幸せどっちが大事？</button>
+ 
+  <button onclick="showStance('努力は才能に勝てる？')">努力は才能に勝てる？</button>
+  <button onclick="showStance('AIは人間を超えるべき？')">AIは人間を超えるべき？</button>
+  <button onclick="showStance('お金と幸せどっちが大事？')">お金と幸せどっちが大事？</button>
 </div>
-
-<!-- ゲーム画面 -->
+ 
+<!-- 主張選択 -->
+<div id="stanceScreen" class="screen">
+  <div class="title">
+    <h2 id="stanceTheme"></h2>
+    <div class="subtitle">あなたの主張を選択</div>
+  </div>
+ 
+  <div id="stanceButtons"></div>
+ 
+  <button class="back-btn" onclick="showScreen('titleScreen')">← 戻る</button>
+</div>
+ 
+<!-- ゲーム -->
 <div id="gameScreen" class="screen">
-
+ 
   <div class="top-bar">
     <div id="themeText"></div>
-    <div id="turnText" class="turn"></div>
+    <div id="turnText"></div>
   </div>
-
-  <!-- 戻るボタン -->
+ 
   <button class="back-btn" onclick="backToTitle()">← タイトルへ戻る</button>
-
+ 
   <div id="chat" class="chat"></div>
-
+ 
   <div class="input-area">
     <input type="text" id="userInput" placeholder="あなたの意見を入力">
     <button onclick="sendMessage()">送信</button>
   </div>
-
+ 
 </div>
-
-<!-- 結果画面 -->
+ 
+<!-- 結果 -->
 <div id="resultScreen" class="screen">
   <div class="result">
     <h2>結果</h2>
-    <div id="scoreText" class="stars"></div>
+    <div id="scoreText"></div>
     <div id="commentText"></div>
-
+ 
     <button onclick="restart()">もう一度</button>
   </div>
 </div>
-
+ 
 </div>
-
-<script>
-let gameData = {
-  theme: "",
-  turn: 5,
-  maxTurn: 5
-};
-
-/* 画面切替 */
-function showScreen(id) {
-  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
-}
-
-/* テーマ選択 */
-function selectTheme(theme) {
-  gameData.theme = theme;
-  gameData.turn = gameData.maxTurn;
-
-  document.getElementById("themeText").innerText = "テーマ：" + theme;
-  updateTurn();
-
-  document.getElementById("chat").innerHTML = "";
-  addMessage("ai", "このテーマについて議論しましょう。");
-
-  showScreen("gameScreen");
-}
-
-/* ターン表示 */
-function updateTurn() {
-  const turnEl = document.getElementById("turnText");
-  turnEl.innerText = "残り：" + gameData.turn;
-
-  if (gameData.turn <= 2) {
-    turnEl.classList.add("red");
-  } else {
-    turnEl.classList.remove("red");
-  }
-}
-
-/* メッセージ追加 */
-function addMessage(type, text) {
-  const msg = document.createElement("div");
-  msg.className = "message " + type;
-
-  const bubble = document.createElement("div");
-  bubble.className = "bubble";
-  bubble.innerText = text;
-
-  msg.appendChild(bubble);
-  document.getElementById("chat").appendChild(msg);
-
-  const chat = document.getElementById("chat");
-  chat.scrollTop = chat.scrollHeight;
-}
-
-/* AI返答 */
-function getAIResponse(input) {
-  if (input.includes("努力")) {
-    return "それは才能がある前提では？";
-  } else if (input.includes("違う")) {
-    return "その根拠は何ですか？";
-  } else {
-    return "もう少し具体的に説明してください。";
-  }
-}
-
-/* 送信 */
-function sendMessage() {
-  const input = document.getElementById("userInput");
-  const text = input.value;
-
-  if (!text) return;
-
-  addMessage("user", text);
-  addMessage("ai", getAIResponse(text));
-
-  input.value = "";
-
-  gameData.turn--;
-  updateTurn();
-
-  if (gameData.turn <= 0) {
-    setTimeout(showResult, 500);
-  }
-}
-
-/* Enterキー送信 */
-document.getElementById("userInput").addEventListener("keydown", function(e) {
-  if (e.key === "Enter") {
-    sendMessage();
-  }
-});
-
-/* 結果 */
-function showResult() {
-  const score = Math.floor(Math.random() * 5) + 1;
-
-  const comments = [
-    "論理的でした",
-    "感情的すぎます",
-    "説得力があります",
-    "主張が弱いです"
-  ];
-
-  document.getElementById("scoreText").innerText = "★".repeat(score);
-  document.getElementById("commentText").innerText =
-    comments[Math.floor(Math.random() * comments.length)];
-
-  showScreen("resultScreen");
-}
-
-/* タイトルに戻る */
-function backToTitle() {
-  if (!confirm("タイトルに戻りますか？")) return;
-
-  gameData.theme = "";
-  gameData.turn = gameData.maxTurn;
-
-  document.getElementById("chat").innerHTML = "";
-  document.getElementById("userInput").value = "";
-
-  showScreen("titleScreen");
-}
-
-/* 再スタート */
-function restart() {
-  showScreen("titleScreen");
-}
-</script>
-
+ 
+<script src="script.js"></script>
 </body>
 </html>
