@@ -6,11 +6,18 @@ async function sendMessage() {
   const userText = input.value;
   if (!userText) return;
 
+  // 1. ユーザーが書いたプロンプトをチャットに挿入
   chat.innerHTML += `<p class="user">${userText}</p>`;
   input.value = "";
 
+  // 2. ロード中の返事
+  const loadingId = "loading-" + Date.now(); // Create a unique ID to find this message later
+  chat.innerHTML += `<p class="ai" id="${loadingId}" style="color: gray italic;">AIが考え中...</p>`;
+  
+  // 自動スクロール（画面調整）
+  chat.scrollTop = chat.scrollHeight;
+
   try {
-    // UPDATED: Points to your school IP instead of localhost
     const response = await fetch("http://10.15.142.19:3000/api", {
       method: "POST",
       headers: {
@@ -23,13 +30,27 @@ async function sendMessage() {
     });
 
     const data = await response.json();
-    const aiReply = data.reply || "エラー：返信を取得できませんでした。";
-    chat.innerHTML += `<p class="ai">${aiReply}</p>`;
     
+    // 3. ロード中のメッセージをAIの返事に書き換える
+    const loadingElement = document.getElementById(loadingId);
+    const aiReply = data.reply || "エラー：返信を取得できませんでした。";
+    
+    if (loadingElement) {
+      loadingElement.innerText = aiReply;
+      loadingElement.style.color = ""; // 色の初期化
+      loadingElement.style.fontStyle = "normal";
+    }
+
     chat.scrollTop = chat.scrollHeight;
 
   } catch (error) {
     console.error("Communication Error:", error);
-    chat.innerHTML += `<p class="ai" style="color: red;">サーバー（10.15.142.19）に接続できません。</p>`;
+    
+    // エラーメッセージ
+    const loadingElement = document.getElementById(loadingId);
+    if (loadingElement) {
+      loadingElement.innerHTML = "サーバーに接続できません。";
+      loadingElement.style.color = "red";
+    }
   }
 }
