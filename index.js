@@ -9,98 +9,76 @@ import { fileURLToPath } from "url";
 
 const app = express();
 
-// ES module対応
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ミドルウェア
 app.use(cors());
 app.use(express.json());
 
-// publicフォルダ
 const publicPath = path.join(__dirname, "public");
 app.use(express.static(publicPath));
 
-// ルート
 app.get("/", (req, res) => {
   res.sendFile(path.join(publicPath, "index.html"));
 });
 
-// 🔑 APIキー（Gemini用）
 const API_KEY = (process.env.API_KEY || "").trim();
-console.log("API_KEY:", API_KEY);
 
-// AI API（Gemini版）
 app.post("/ai", async (req, res) => {
-  console.log("🔥 /ai にリクエスト来た");
-
   try {
     const { message, theme } = req.body;
 
-    if (!message || !theme) {
-      return res.status(400).json({ error: "入力不足" });
+    if (!message) {
+      return res.status(400).json({ error: "messageがありません" });
+    }
+
+    if (!theme) {
+      return res.status(400).json({ error: "themeがありません" });
     }
 
     if (!API_KEY) {
       return res.status(500).json({ error: "API_KEYが設定されていません" });
     }
 
-    // ⭐ 最新Cohere API
-    const response = await fetch("https://api.cohere.ai/v2/chat", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${API_KEY}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        model: "command-r-plus-08-2024",
+        model: "gpt-4o-mini",
         messages: [
           {
+            role: "system",
+            content: `あなたはディベートAIです。テーマ：「${theme}」。必ず反対意見を100文字以内で答えてください。`
+          },
+          {
             role: "user",
-            content: `
-あなたはディベート対戦AIです。
-テーマ：「${theme}」
-
-必ずユーザーと反対の立場で論理的に反論してください。
-100文字以内で簡潔に答えてください。
-
-ユーザーの意見：
-${message}
-`
+            content: message
           }
         ]
       })
     });
 
     const data = await response.json();
-    console.log("Cohereレスポンス ↓");
-    console.log(data);
 
     if (!response.ok) {
-      return res.status(response.status).json({
-        error: "Cohere APIエラー",
-        detail: data
-      });
+      return res.status(response.status).json({ error: data });
     }
 
-    // ⭐ 新しい取り出し方
-    const reply =
-      data?.message?.content?.[0]?.text ||
-      data?.text ||
-      "応答なし";
+    const reply = data?.choices?.[0]?.message?.content || "応答なし";
 
-    console.log("AIレスポンス ↓");
-    console.log(reply);
+    console.log("AI:", reply);
 
     res.json({ reply });
 
-  } catch (error) {
-    console.error("サーバーエラー:", error);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "サーバーエラー" });
   }
 });
 
-// 起動
 app.listen(3000, () => {
   console.log("🔥 サーバー起動: http://localhost:3000");
 });
