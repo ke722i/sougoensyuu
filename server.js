@@ -1,106 +1,52 @@
-import dotenv from "dotenv";
-dotenv.config();
-
-import express from "express";
-import fetch from "node-fetch";
-import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
+const express = require("express");
+const cors = require("cors");
 
 const app = express();
-
-// ES module対応
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// ミドルウェア
 app.use(cors());
 app.use(express.json());
 
-// publicフォルダ
-const publicPath = path.join(__dirname, "public");
-app.use(express.static(publicPath));
+// PASTE YOUR KEY DIRECTLY HERE - NO SPACES
+const MY_API_KEY = "AIzaSyBns5O45rrmDuiiJryEcpdhSTRYN_XQh-g"; 
 
-// ルート
-app.get("/", (req, res) => {
-  res.sendFile(path.join(publicPath, "index.html"));
-});
-
-// 🔑 APIキー（Gemini用）
-const API_KEY = (process.env.API_KEY || "").trim();
-console.log("API_KEY:", API_KEY);
-
-// AI API（Gemini版）
-app.post("/ai", async (req, res) => {
-  console.log("🔥 /ai にリクエスト来た");
+app.post("/api", async (req, res) => {
+  const { message, theme } = req.body;
+  // Use backticks for console.log
+  console.log(`Received debate request. Theme: ${theme}, Message: ${message}`);
 
   try {
-    const { message, theme } = req.body;
+    // FIXED: Using backticks (`) so ${MY_API_KEY} works
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${MY_API_KEY}`;
 
-    if (!message || !theme) {
-      return res.status(400).json({ error: "入力不足" });
-    }
-
-    if (!API_KEY) {
-      return res.status(500).json({ error: "API_KEYが設定されていません" });
-    }
-
-    // ⭐ 最新Cohere API
-    const response = await fetch("https://api.cohere.ai/v2/chat", {
+    const response = await fetch(apiUrl, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${API_KEY}`,
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "command-r-plus-08-2024",
-        messages: [
-          {
-            role: "user",
-            content: `
-あなたはディベート対戦AIです。
-テーマ：「${theme}」
-
-必ずユーザーと反対の立場で論理的に反論してください。
-100文字以内で簡潔に答えてください。
-
-ユーザーの意見：
-${message}
-`
-          }
-        ]
+        contents: [{
+          parts: [{ 
+            // FIXED: Using backticks (`) for the prompt too
+            text: `返事は100文字以内にしてください。あなたは討論の達人です。テーマ「${theme}」について、次の意見に全力で反論してください：${message}` 
+          }]
+        }]
       })
     });
 
     const data = await response.json();
-    console.log("Cohereレスポンス ↓");
-    console.log(data);
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: "Cohere APIエラー",
-        detail: data
-      });
+    if (data.error) {
+      console.error("Google API Error Details:", JSON.stringify(data.error, null, 2));
+      // FIXED: Using backticks (`) for the error message
+      return res.status(400).json({ reply: `API Error: ${data.error.message}` });
     }
 
-    // ⭐ 新しい取り出し方
-    const reply =
-      data?.message?.content?.[0]?.text ||
-      data?.text ||
-      "応答なし";
-
-    console.log("AIレスポンス ↓");
-    console.log(reply);
-
+    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "AI produced an empty response.";
     res.json({ reply });
 
   } catch (error) {
-    console.error("サーバーエラー:", error);
-    res.status(500).json({ error: "サーバーエラー" });
+    console.error("Server Crash Error:", error);
+    res.status(500).json({ reply: "The server crashed. Check the terminal." });
   }
 });
 
-// 起動
 app.listen(3000, () => {
-  console.log("🔥 サーバー起動: http://localhost:3000");
+  console.log("SERVER RUNNING - BACKTICKS FIXED");
 });
