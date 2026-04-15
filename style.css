@@ -1,80 +1,213 @@
-/* Logo Frame Styling */
-.logo-placeholder {
-  width: 150px;
-  height: 150px;
-  border: 2px dashed #bbb;
-  border-radius: 15px;
-  margin: 20px auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #eee;
-  color: #888;
-  font-weight: bold;
-}
-
-#login-screen {
-  background: white;
-  padding: 40px;
-  border-radius: 12px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-  margin-top: 50px;
-}
-
-.start-btn {
-  background-color: #4CAF50;
-  color: white;
-  padding: 15px 30px;
-  border: none;
-  border-radius: 25px;
-  font-size: 18px;
-  cursor: pointer;
-  transition: 0.3s;
-}
-
-.start-btn:hover {
-  background-color: #45a049;
-  transform: scale(1.05);
-}
-
+/* --- 共通・ベース設定 --- */
 body {
-  font-family: sans-serif;
-  text-align: center;
-  background: #f5f5f5;
+  margin: 0;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+  background: #f0f2f5;
+  color: #333;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  min-height: 100vh;
 }
 
 .container {
-  width: 400px;
+  width: 100%;
+  max-width: 800px;
   margin: auto;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
-#chat {
-  height: 300px;
-  overflow-y: scroll;
-  border: 1px solid #ccc;
-  background: white;
-  padding: 10px;
-  margin: 10px 0;
-}
+.screen { display: none; }
+.active { display: block; }
 
-.user {
-  text-align: right;
-  color: blue;
-}
-
-.ai {
-  text-align: left;
-  color: green;
-}
-
-input[type="text"] {
-  width: 70%;
-  padding: 10px;
-  border-radius: 5px;
-  border: 1px solid #ccc;
-}
-
+/* --- ボタンの共通スタイル & インタラクション --- */
 button {
-  padding: 10px 15px;
+  width: 100%;
+  padding: 12px;
+  margin-top: 5px;
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 10px;
+  background: white;
   cursor: pointer;
+  font-weight: bold;
+  font-size: 0.95rem;
+  transition: all 0.2s ease; /* 動きを滑らかに */
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* 初期の軽い影 */
+  outline: none;
 }
+
+/* ホバー時：軽く影がつき、少し浮き上がる */
+button:hover {
+  transform: translateY(-2px); /* 2px上に浮かせる */
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1); /* 影を強くして浮遊感を出す */
+  filter: brightness(0.98); /* わずかに色を変えて反応を示す */
+}
+
+/* クリック時：実際に押し込まれたように凹ませる */
+button:active {
+  transform: translateY(1px); /* 1px下に沈ませる */
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1) inset; /* 内側に影をつけて凹みを表現 */
+  filter: brightness(0.95);
+}
+
+/* --- 1. トップ画面 --- */
+#login-screen {
+  text-align: center;
+  background: white;
+  padding: 60px 20px;
+  border-radius: 20px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+  max-width: 450px; 
+  margin: 50px auto;
+}
+
+.logo-placeholder {
+  width: 100px; height: 100px;
+  background: #e2e8f0;
+  border: 3px dashed #cbd5e1;
+  border-radius: 25px;
+  margin: 0 auto 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: bold; color: #94a3b8;
+}
+
+.start-btn {
+  display: inline-block;
+  width: auto;
+  background: #4CAF50 !important;
+  color: white !important;
+  border: none;
+  padding: 15px 50px;
+  border-radius: 30px;
+  margin-top: 20px;
+}
+
+/* --- 2. テーマ選択 (2x2 グリッド) --- */
+.theme-grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(2, 1fr);
+  margin-bottom: 20px;
+}
+
+@media (max-width: 600px) {
+  .theme-grid { grid-template-columns: 1fr; }
+  .category.custom { order: 10; }
+}
+
+.category { padding: 20px; border-radius: 15px; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+.cat-label { font-weight: bold; margin-bottom: 12px; display: block; font-size: 1rem; }
+
+.ai { background: #e0f2fe; }
+.life { background: #f0fdf4; }
+.human { background: #fdf2f8; }
+.custom { background: #f8fafc; border: 2px solid #e2e8f0; }
+
+#customThemeInput {
+  width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1;
+  box-sizing: border-box; margin-bottom: 10px; font-size: 0.95rem;
+}
+.custom-start-btn { background: #64748b !important; color: white !important; border: none; }
+
+/* --- 3. 主張選択画面 --- */
+#stanceScreen {
+  text-align: center; background: white; padding: 40px 20px;
+  border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+  max-width: 500px; margin: 30px auto;
+}
+
+/* --- 4. チャット画面 --- */
+.chat-box {
+  height: 400px; overflow-y: auto; background: white;
+  border-radius: 15px; padding: 20px; margin-bottom: 15px; border: 1px solid #e2e8f0;
+}
+
+.message { display: flex; margin-bottom: 15px; background: transparent !important; }
+.message.user { justify-content: flex-end; }
+.message.ai { justify-content: flex-start; }
+
+.bubble {
+  max-width: 80%; padding: 12px 16px; border-radius: 18px;
+  font-size: 0.95rem; line-height: 1.5;
+}
+.user .bubble { background: #4CAF50; color: white; border-bottom-right-radius: 2px; }
+.ai .bubble { background: #f1f5f9; color: #333; border-bottom-left-radius: 2px; }
+
+/* --- AIが考え中（タイピングアニメーション） --- */
+.typing-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.dots {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  height: 10px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  background-color: #94a3b8; /* ドットの色 */
+  border-radius: 50%;
+  animation: wave 1.4s infinite ease-in-out;
+}
+
+/* 2番目と3番目のドットに遅延をかけて波打たせる */
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+
+/* 波打つアニメーション：上下に動きながら色（透明度）が変わる */
+@keyframes wave {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.3;
+  }
+  30% {
+    transform: translateY(-5px);
+    opacity: 1;
+  }
+}
+
+/* 入力エリア（自動伸縮） */
+.input-area {
+  display: flex; gap: 10px; align-items: flex-end;
+  background: white; padding: 10px; border-radius: 15px;
+}
+
+#userInput {
+  flex: 1; padding: 12px; border-radius: 12px; border: 2px solid #e2e8f0;
+  resize: none; font-family: inherit; font-size: 1rem;
+  min-height: 54px; max-height: 150px; overflow-y: hidden;
+  transition: border-color 0.2s;
+}
+#userInput:focus { outline: none; border-color: #4CAF50; }
+
+#sendBtn { 
+  width: 70px; height: 54px; background: #4CAF50 !important; 
+  color: white !important; border: none; border-radius: 12px; 
+}
+
+.finish-btn { 
+  background: #f59e0b !important; 
+  color: white !important; 
+  border: none; 
+  margin-top: 15px; 
+}
+
+/* 戻る・中断のテキストリンク（影をつけない） */
+.back-link { 
+  display: block; text-align: center; color: #64748b; 
+  margin-top: 20px; cursor: pointer; background: none; 
+  border: none; box-shadow: none; 
+}
+.back-link:hover { transform: none; box-shadow: none; text-decoration: underline; filter: none; }
+
+/* --- 5. 結果画面 --- */
+#resultScreen { text-align: center; background: white; padding: 40px; border-radius: 20px; max-width: 500px; margin: 50px auto; }
+.score { font-size: 4rem; font-weight: bold; color: #4CAF50; margin: 20px 0; }

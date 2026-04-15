@@ -2,43 +2,88 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>AIディベートアプリ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIディベートバトル</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <div class="container">
-    
-    <div id="login-screen">
-      <div class="logo-placeholder">
-        <p>ロゴの枠</p>
-      </div>
-      
-      <h2>議論ゲーム</h2>
-      <p>Are you ready?</p>
-      
-      <button class="start-btn" onclick="login()">スタート</button>
-    </div>
-
-    <div id="main-game" style="display: none;">
-      <h1>AIディベートバトル</h1>
-
-      <select id="theme">
-        <option value="学校にスマホは必要か">学校にスマホは必要か</option>
-        <option value="AIは人間の仕事を奪うか">AIは人間の仕事を奪うか</option>
-        <option value="リモートワークは良いか">リモートワークは良いか</option>
-      </select>
-
-      <div id="chat"></div>
-
-      <div class="input-area">
-        <input type="text" id="userInput" placeholder="あなたの意見を書く">
-        <button onclick="sendMessage()">送信</button>
-      </div>
-    </div>
-
+<div class="container">
+  
+  <div id="login-screen" class="screen active">
+    <div class="logo-placeholder"><p>LOGO</p></div>
+    <h1 class="main-title">AIディベートバトル</h1>
+    <p>論理の力でAIを圧倒せよ</p>
+    <button class="start-btn" onclick="showScreen('theme-screen')">スタート</button>
   </div>
 
-  <script src="script.js"></script>
+  <div id="theme-screen" class="screen">
+    <h2 class="screen-title">テーマを選んでください</h2>
+    
+    <div class="theme-grid">
+      <div class="category ai">
+        <p class="cat-label">AI・テクノロジー</p>
+        <button onclick="showStance('ai1')">AIは人間の知能を超える？</button>
+        <button onclick="showStance('ai2')">AIと人間、どちらが信頼できる？</button>
+        <button onclick="showStance('ai3')">AIで人間は幸せになる？</button>
+      </div>
+
+      <div class="category life">
+        <p class="cat-label">人生・価値観</p>
+        <button onclick="showStance('life1')">安定した人生を選ぶべき？</button>
+        <button onclick="showStance('life2')">お金は人生で最も重要？</button>
+        <button onclick="showStance('life3')">努力と才能、どちらが重要？</button>
+      </div>
+
+      <div class="category human">
+        <p class="cat-label">人間関係</p>
+        <button onclick="showStance('human1')">正直であることは常に正しい？</button>
+        <button onclick="showStance('human2')">他人を完全に理解できるか？</button>
+        <button onclick="showStance('human3')">恋愛と友情、大事なのは？</button>
+      </div>
+
+      <div class="category custom">
+        <p class="cat-label">自由入力</p>
+        <div class="custom-input-group">
+          <input type="text" id="customThemeInput" placeholder="例：きのこ派 vs たけのこ派">
+          <button class="custom-start-btn" onclick="startCustomTheme()">このテーマで開始</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="back-link" onclick="showScreen('login-screen')">トップに戻る</button>
+  </div>
+
+  <div id="stanceScreen" class="screen">
+    <h2 id="themeTitle"></h2>
+    <p>あなたの立場を選んでください</p>
+    <div id="stanceButtons"></div>
+    <button class="back-link" onclick="showScreen('theme-screen')">テーマ選択に戻る</button>
+  </div>
+
+  <div id="gameScreen" class="screen">
+    <div class="game-header">
+      <h3 id="themeText"></h3>
+      <p id="turnText"></p>
+    </div>
+    <div id="chat" class="chat-box"></div>
+    <div class="input-area">
+      <textarea id="userInput" placeholder="あなたの意見を入力" rows="1"></textarea>
+      <button id="sendBtn" onclick="sendMessage()">送信</button>
+    </div>
+    <button class="finish-btn" onclick="confirmFinish()">議論を終了して結果を見る</button>
+    <button class="back-link" onclick="backToTitle()">中断してタイトルへ</button>
+  </div>
+
+  <div id="resultScreen" class="screen">
+    <h1>ディベート終了</h1>
+    <div id="scoreText" class="score"></div>
+    <div id="commentText" class="comment"></div>
+    <button class="start-btn" onclick="showScreen('login-screen')">タイトルに戻る</button>
+  </div>
+
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
