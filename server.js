@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 
@@ -5,7 +6,11 @@ const app = express();
 app.use(cors()); 
 app.use(express.json());
 
-const MY_API_KEY = "AIzaSyCC7VcRcDtPwG00cnKQrG4Hy9W4RZidi_k"; 
+const MY_API_KEY = process.env.GEMINI_API_KEY; 
+
+app.get("/", (req, res) => {
+  res.send("<h1>🤖 Debate AI Backend is Running!</h1><p>Status: Healthy</p>");
+});
 
 app.post("/api", async (req, res) => {
   const { message, theme } = req.body;
@@ -14,7 +19,6 @@ app.post("/api", async (req, res) => {
   console.log(`User:  ${message}`);
 
   try {
-    // We switched from 'v1beta' to 'v1' and added '-latest' for reliability
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${MY_API_KEY}`;
 
     const response = await fetch(apiUrl, {
@@ -51,9 +55,15 @@ app.post("/api", async (req, res) => {
 });
 
 const PORT = 3000;
+const LIVE_SERVER_PORT = 5500; // Change this if your Live Server uses a different number
+
 app.listen(PORT, "0.0.0.0", () => {
+  console.log("=========================================");
+  console.log("🚀 DEBATE AI SERVER IS ACTIVE");
+  console.log(`📡 Backend API: http://10.15.142.19:${PORT}/api`);
   console.log("-----------------------------------------");
-  console.log(`🚀 SERVER IS LIVE!`);
-  console.log(`URL: http://10.15.142.19:${PORT}`);
-  console.log("-----------------------------------------");
+  console.log("🎮 TO PLAY THE GAME:");
+  console.log(`1. Open your browser to: http://10.15.142.19:${LIVE_SERVER_PORT}`);
+  console.log("   (OR just double-click index.html)");
+  console.log("=========================================");
 });
