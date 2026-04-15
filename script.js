@@ -4,16 +4,14 @@ async function sendMessage() {
   const theme = document.getElementById("theme").value;
 
   const userText = input.value;
-  if (!userText) return; // Don't send empty messages
+  if (!userText) return;
 
-  // ユーザー表示 - Note the use of backticks ``
   chat.innerHTML += `<p class="user">${userText}</p>`;
-
   input.value = "";
 
   try {
-    // APIへ送信
-    const response = await fetch("http://localhost:3000/api", {
+    // UPDATED: Points to your school IP instead of localhost
+    const response = await fetch("http://10.15.142.19:3000/api", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -25,17 +23,13 @@ async function sendMessage() {
     });
 
     const data = await response.json();
-
-    // AI表示 - Note the use of backticks ``
-    // We check if data.reply exists, otherwise show an error
     const aiReply = data.reply || "エラー：返信を取得できませんでした。";
     chat.innerHTML += `<p class="ai">${aiReply}</p>`;
-
-    // Automatic scroll to bottom
+    
     chat.scrollTop = chat.scrollHeight;
 
   } catch (error) {
     console.error("Communication Error:", error);
-    chat.innerHTML += `<p class="ai" style="color: red;">サーバーに接続できませんでした。</p>`;
+    chat.innerHTML += `<p class="ai" style="color: red;">サーバー（10.15.142.19）に接続できません。</p>`;
   }
 }
