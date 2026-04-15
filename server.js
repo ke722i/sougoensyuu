@@ -26,7 +26,7 @@ app.post("/api", async (req, res) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{
-          parts: [{ text: `あなたはプロの討論者です。テーマ「${theme}」について、相手の意見「${message}」に対して、論理的に反論してください。短く3文程度で日本語で答えてください。` }]
+          parts: [{ text: `あなたはプロの討論者です。テーマ「${theme}」について、相手の意見「${message}」に対して、論理的に反論してください。50文字以内に抑えてください。` }]
         }]
       })
     });
@@ -59,11 +59,11 @@ const LIVE_SERVER_PORT = 5500; // Change this if your Live Server uses a differe
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log("=========================================");
-  console.log("🚀 DEBATE AI SERVER IS ACTIVE");
+  console.log("🚀 議論AIサーバー：起動完了");
   console.log(`📡 Backend API: http://10.15.142.19:${PORT}/api`);
   console.log("-----------------------------------------");
-  console.log("🎮 TO PLAY THE GAME:");
-  console.log(`1. Open your browser to: http://10.15.142.19:${LIVE_SERVER_PORT}`);
-  console.log("   (OR just double-click index.html)");
+  console.log("🎮 ゲームのやり方:");
+  console.log(`1. ブラウザでこちらにアクセス: http://10.15.142.19:${LIVE_SERVER_PORT}`);
+  console.log("   (または、index.htmlをダブルクリック。)");
   console.log("=========================================");
 });
