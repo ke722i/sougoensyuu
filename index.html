@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>AIディベートアプリ</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <h1>AIディベートバトル</h1>
+
+  <div class="container">
+    <select id="theme">
+      <option value="学校にスマホは必要か">学校にスマホは必要か</option>
+      <option value="AIは人間の仕事を奪うか">AIは人間の仕事を奪うか</option>
+      <option value="リモートワークは良いか">リモートワークは良いか</option>
+    </select>
+
+    <div id="chat"></div>
+
+    <input type="text" id="userInput" placeholder="あなたの意見を書く">
+    <button onclick="sendMessage()">送信</button>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
