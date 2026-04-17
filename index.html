@@ -76,9 +76,17 @@
   </div>
 
   <div id="resultScreen" class="screen">
-    <h1>ディベート終了</h1>
-    <div id="scoreText" class="score"></div>
-    <div id="commentText" class="comment"></div>
+    <h1 class="result-title">ディベート終了</h1>
+    
+    <div id="scoreText" class="score" style="font-size: 60px; color: #4CAF50; font-weight: bold; margin: 20px 0;">--点</div>
+    
+    <div class="result-container" style="background: #f9f9f9; padding: 20px; border-radius: 10px; border-left: 5px solid #4CAF50; margin: 20px 0;">
+      <h3 style="margin-top: 0; color: #333;">🧠 性格・思考スタイル分析</h3>
+      <div id="commentText" class="comment" style="white-space: pre-wrap; text-align: left; line-height: 1.6; font-size: 16px;">
+        AIが分析中です...
+      </div>
+    </div>
+
     <button class="start-btn" onclick="showScreen('login-screen')">タイトルに戻る</button>
   </div>
 
