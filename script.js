@@ -83,16 +83,13 @@ function updateTurnDisplay() {
   document.getElementById("turnText").innerText = `残りターン: ${gameData.turn}`;
 }
 
-// メッセージ送信（アニメーション対応版）
+// メッセージ送信
 async function sendMessage() {
   const input = document.getElementById("userInput");
   const userText = input.value.trim();
   if (!userText || gameData.isWaiting || gameData.turn <= 0) return;
 
-  // ユーザーメッセージの表示
   addMessage("user", userText);
-  
-  // 入力欄リセット
   input.value = "";
   input.style.height = "54px"; 
   
@@ -100,7 +97,6 @@ async function sendMessage() {
   updateTurnDisplay();
   gameData.isWaiting = true;
 
-  // AIのタイピングアニメーション（Discord風）の生成
   const loadingId = "load-" + Date.now();
   const typingHtml = `
     <div class="typing-container">
@@ -126,14 +122,11 @@ async function sendMessage() {
     });
     
     const data = await response.json();
-    
-    // アニメーション要素を取得して実際のテキストに書き換え
     const loadingEl = document.getElementById(loadingId);
     if (loadingEl) {
       loadingEl.innerHTML = data.reply || "返信を取得できませんでした。";
     }
 
-    // 終了判定
     if (gameData.turn <= 0) {
       document.querySelector(".finish-btn").style.display = "none";
       showResultButton();
@@ -160,12 +153,43 @@ function showResultButton() {
   chat.scrollTop = chat.scrollHeight;
 }
 
-// 結果表示
-function showResult() {
-  const score = Math.floor(Math.random() * 61) + 40;
-  document.getElementById("scoreText").innerText = `${score}点`;
-  document.getElementById("commentText").innerText = "議論お疲れ様でした！あなたの論理展開は非常に興味深いものでした。";
+// 結果表示 (MBTI取得ロジックを追加)
+async function showResult() {
+  // 画面を切り替えて初期表示をセット
   showScreen("resultScreen");
+  document.getElementById("scoreText").innerText = "分析中...";
+  document.getElementById("commentText").innerText = "これまでの議論に基づき、あなたのMBTI性格タイプを分析しています...";
+
+  try {
+    // サーバーに診断結果（MBTI）をリクエスト
+    const response = await fetch("http://10.15.142.19:3000/api", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        message: "議論を終了します。これまでの私の意見や対話スタイルから推測されるMBTIタイプとその理由、および議論の総評を教えてください。", 
+        theme: gameData.theme,
+        stance: gameData.stance
+      })
+    });
+
+    const data = await response.json();
+    
+    // スコアの演出 (60-99点)
+    const score = Math.floor(Math.random() * 40) + 60;
+    document.getElementById("scoreText").innerText = `${score}点`;
+    
+    // AIからの診断結果を反映
+    if (data.reply) {
+      document.getElementById("commentText").innerText = data.reply;
+    } else {
+      document.getElementById("commentText").innerText = "診断結果を取得できませんでした。";
+    }
+
+  } catch (e) {
+    console.error("Result fetch error:", e);
+    document.getElementById("scoreText").innerText = "Error";
+    document.getElementById("commentText").innerText = "サーバーとの接続に失敗しました。";
+  }
 }
 
 // 途中終了確認
@@ -188,13 +212,11 @@ function backToTitle() {
 document.addEventListener("DOMContentLoaded", () => {
   const input = document.getElementById("userInput");
 
-  // 入力欄の高さ自動調整
   input.addEventListener("input", function() {
     this.style.height = "auto";
     this.style.height = (this.scrollHeight) + "px";
   });
 
-  // Enterキーで送信（Shift+Enterは改行）
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
