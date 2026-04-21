@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIディベートバトル & MBTI診断</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="container">
+  
+  <div id="login-screen" class="screen active">
+    <div class="logo-placeholder"><p>🤖</p></div>
+    <h1 class="main-title">AI Debate Battle</h1>
+    <p>ログインして議論を開始しましょう</p>
+    
+    <div class="auth-form">
+      <input type="text" id="authUser" placeholder="ユーザー名" autocomplete="off">
+      <input type="password" id="authPass" placeholder="パスワード">
+      
+      <div class="auth-buttons">
+        <button type="button" class="start-btn" onclick="handleAuth('login')">ログイン</button>
+        <button type="button" class="start-btn secondary" onclick="handleAuth('register')">新規登録</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="theme-screen" class="screen">
+    <div id="userBadge" class="user-badge"></div>
+    <h2 class="screen-title">テーマを選択してください</h2>
+    
+    <div class="theme-grid">
+      <div class="category ai">
+        <p class="cat-label">AI & テクノロジー</p>
+        <button type="button" onclick="showStance('ai1')">AIは人間の知能を超える？</button>
+        <button type="button" onclick="showStance('ai2')">AIと人間、どちらが信頼できる？</button>
+        <button type="button" onclick="showStance('ai3')">AIで人間は幸せになる？</button>
+      </div>
+
+      <div class="category life">
+        <p class="cat-label">人生・価値観</p>
+        <button type="button" onclick="showStance('life1')">安定した人生を選ぶべき？</button>
+        <button type="button" onclick="showStance('life2')">お金は人生で最も重要？</button>
+        <button type="button" onclick="showStance('life3')">努力と才能、どちらが重要？</button>
+      </div>
+
+      <div class="category human">
+        <p class="cat-label">人間関係</p>
+        <button type="button" onclick="showStance('human1')">正直であることは常に正しい？</button>
+        <button type="button" onclick="showStance('human2')">他人を完全に理解できるか？</button>
+        <button type="button" onclick="showStance('human3')">恋愛と友情、大事なのは？</button>
+      </div>
+
+      <button type="button" class="start-btn history-btn" onclick="showHistory()">対戦履歴を見る</button>
+    </div>
+    <button type="button" class="back-link" onclick="location.reload()">ログアウト</button>
+  </div>
+
+  <div id="stanceScreen" class="screen">
+    <h2 id="themeTitle" class="theme-title-display"></h2>
+    <p>あなたの立場を選んでください：</p>
+    <div id="stanceButtons" class="stance-container"></div>
+    <button type="button" class="back-link" onclick="showScreen('theme-screen')">戻る</button>
+  </div>
+
+  <div id="gameScreen" class="screen">
+    <div class="game-header">
+      <h3 id="themeText"></h3>
+      <p id="turnText">残りターン: --</p>
+    </div>
+    <div id="chat" class="chat-box"></div>
+    <div class="input-area">
+      <textarea id="userInput" placeholder="自分の意見を入力..." rows="1"></textarea>
+      <button type="button" id="sendBtn" onclick="sendMessage()">送信</button>
+    </div>
+    <button type="button" class="finish-btn" onclick="confirmFinish()">議論を終了して結果を見る</button>
+  </div>
+
+  <div id="resultScreen" class="screen">
+    <h1 class="result-title">ディベート結果</h1>
+    <div id="scoreText" class="score-display">--点</div>
+    <div id="commentText" class="result-comment">分析中...</div>
+    <button type="button" class="start-btn" onclick="showScreen('theme-screen')">ロビーに戻る</button>
+  </div>
+
+  <div id="historyScreen" class="screen">
+    <h2 class="screen-title">過去の対戦履歴</h2>
+    <div id="historyList" class="history-list"></div>
+    <button type="button" class="start-btn" onclick="showScreen('theme-screen')">戻る</button>
+  </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

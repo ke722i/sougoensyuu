@@ -1,106 +1,108 @@
-import dotenv from "dotenv";
-dotenv.config();
-import express from "express";
-import fetch from "node-fetch";
-import cors from "cors";
-import path from "path";
-import { fileURLToPath } from "url";
+require('dotenv').config();
+const express = require("express");
+const cors = require("cors");
+const Datastore = require('nedb-promises');
+const bcrypt = require('bcrypt');
 
 const app = express();
-
-// ES module対応
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// ミドルウェア
-app.use(cors());
+app.use(cors()); 
 app.use(express.json());
 
-// publicフォルダ
-const publicPath = path.join(__dirname, "public");
-app.use(express.static(publicPath));
+// データベースの初期化 (自動的にファイルが作成されます)
+const usersDB = Datastore.create('users.db');
+const battlesDB = Datastore.create('battles.db');
 
-// ルート
-app.get("/", (req, res) => {
-  res.sendFile(path.join(publicPath, "index.html"));
-});
+const MY_API_KEY = process.env.GEMINI_API_KEY; 
 
-// 🔑 APIキー（.env想定 / 直書き禁止）
-const API_KEY = (process.env.API_KEY || "").trim();
+// --- 認証 API ---
 
-// AI API
-app.post("/ai", async (req, res) => {
+// ユーザー登録
+app.post("/api/register", async (req, res) => {
+  const { username, password } = req.body;
   try {
-    const { message, theme } = req.body;
+    const existingUser = await usersDB.findOne({ username });
+    if (existingUser) return res.status(400).json({ error: "このユーザー名は既に使用されています。" });
 
-    // 入力チェック
-    if (!message) {
-      return res.status(400).json({ error: "messageがありません" });
-    }
-
-    if (!theme) {
-      return res.status(400).json({ error: "themeがありません" });
-    }
-
-    if (!API_KEY) {
-      return res.status(500).json({ error: "API_KEYが設定されていません" });
-    }
-
-    // OpenAIリクエスト
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `
-あなたはディベート対戦AIです。
-テーマ：「${theme}」
-
-必ずユーザーと反対の立場で論理的に反論してください。
-100文字以内で簡潔に答えてください。
-`
-          },
-          {
-            role: "user",
-            content: message
-          }
-        ],
-        temperature: 0.7
-      })
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await usersDB.insert({ 
+      username, 
+      password: hashedPassword, 
+      mbti: "未診断", 
+      totalBattles: 0 
     });
-
-    const data = await response.json();
-
-    // OpenAIエラーハンドリング
-    if (!response.ok) {
-      console.error("OpenAIエラー:", data);
-      return res.status(response.status).json({
-        error: "OpenAI APIエラー",
-        detail: data
-      });
-    }
-
-    const reply = data?.choices?.[0]?.message?.content || "応答なし";
-
-    console.log("AIレスポンス ↓");
-    console.log(reply);
-
-    // フロントに返すのはシンプルに
-    res.json({ reply });
-
+    
+    res.json({ message: "登録が完了しました！", username });
   } catch (error) {
-    console.error("サーバーエラー:", error);
-    res.status(500).json({ error: "サーバーエラーが発生しました" });
+    res.status(500).json({ error: "登録に失敗しました。" });
   }
 });
 
-// 起動
-app.listen(3000, () => {
-  console.log("🔥 サーバー起動: http://localhost:3000");
+// ログイン
+app.post("/api/login", async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const user = await usersDB.findOne({ username });
+    if (user && await bcrypt.compare(password, user.password)) {
+      res.json({ username: user.username, mbti: user.mbti });
+    } else {
+      res.status(401).json({ error: "ユーザー名またはパスワードが正しくありません。" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "ログインに失敗しました。" });
+  }
 });
+
+// --- 履歴保存 API ---
+
+app.post("/api/save-battle", async (req, res) => {
+  const { username, theme, score, mbti } = req.body;
+  try {
+    await battlesDB.insert({ username, theme, score, mbti, date: new Date() });
+    await usersDB.update({ username }, { $set: { mbti: mbti }, $inc: { totalBattles: 1 } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "データの保存に失敗しました。" });
+  }
+});
+
+app.get("/api/history/:username", async (req, res) => {
+  const history = await battlesDB.find({ username: req.params.username }).sort({ date: -1 });
+  res.json(history);
+});
+
+// --- メインディベート API ---
+
+app.post("/api", async (req, res) => {
+  const { message, theme, stance, username } = req.body;
+  const user = await usersDB.findOne({ username });
+  
+  // ユーザーの過去のMBTIを記憶として注入
+  const memoryContext = user && user.mbti !== "未診断" 
+    ? `[過去の分析結果: このユーザーは過去に ${user.mbti} と診断されました。]`
+    : "";
+
+  try {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${MY_API_KEY}`;
+
+    let systemInstruction = `${memoryContext}
+    あなたは論理的かつ親しみやすいAIディベーターです。
+    テーマ: ${theme} / ユーザーの立場: ${stance}
+    
+    【ルール】
+    1. 終了の意志がある場合：反論を止め、MBTI診断結果を【MBTI：タイプ名】形式で含めて回答してください。
+    2. 継続中の場合：100文字以内で論理的な反論を返してください。`;
+
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: systemInstruction }] }] })
+    });
+
+    const data = await response.json();
+    res.json({ reply: data.candidates[0].content.parts[0].text });
+  } catch (error) {
+    res.status(500).json({ reply: "エラーが発生しました。" });
+  }
+});
+
+app.listen(3000, "0.0.0.0", () => console.log("🚀 Server Ready"));
