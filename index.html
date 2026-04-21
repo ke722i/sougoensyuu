@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AIディベートバトル</title>
+  <title>AIディベートバトル & MBTI診断</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,83 +11,83 @@
 <div class="container">
   
   <div id="login-screen" class="screen active">
-    <div class="logo-placeholder"><p>LOGO</p></div>
-    <h1 class="main-title">AIディベートバトル</h1>
-    <p>論理の力でAIを圧倒せよ</p>
-    <button class="start-btn" onclick="showScreen('theme-screen')">スタート</button>
+    <div class="logo-placeholder"><p>🤖</p></div>
+    <h1 class="main-title">AI Debate Battle</h1>
+    <p>ログインして議論を開始しましょう</p>
+    
+    <div class="auth-form">
+      <input type="text" id="authUser" placeholder="ユーザー名" autocomplete="off">
+      <input type="password" id="authPass" placeholder="パスワード">
+      
+      <div class="auth-buttons">
+        <button type="button" class="start-btn" onclick="handleAuth('login')">ログイン</button>
+        <button type="button" class="start-btn secondary" onclick="handleAuth('register')">新規登録</button>
+      </div>
+    </div>
   </div>
 
   <div id="theme-screen" class="screen">
-    <h2 class="screen-title">テーマを選んでください</h2>
+    <div id="userBadge" class="user-badge"></div>
+    <h2 class="screen-title">テーマを選択してください</h2>
     
     <div class="theme-grid">
       <div class="category ai">
-        <p class="cat-label">AI・テクノロジー</p>
-        <button onclick="showStance('ai1')">AIは人間の知能を超える？</button>
-        <button onclick="showStance('ai2')">AIと人間、どちらが信頼できる？</button>
-        <button onclick="showStance('ai3')">AIで人間は幸せになる？</button>
+        <p class="cat-label">AI & テクノロジー</p>
+        <button type="button" onclick="showStance('ai1')">AIは人間の知能を超える？</button>
+        <button type="button" onclick="showStance('ai2')">AIと人間、どちらが信頼できる？</button>
+        <button type="button" onclick="showStance('ai3')">AIで人間は幸せになる？</button>
       </div>
 
       <div class="category life">
         <p class="cat-label">人生・価値観</p>
-        <button onclick="showStance('life1')">安定した人生を選ぶべき？</button>
-        <button onclick="showStance('life2')">お金は人生で最も重要？</button>
-        <button onclick="showStance('life3')">努力と才能、どちらが重要？</button>
+        <button type="button" onclick="showStance('life1')">安定した人生を選ぶべき？</button>
+        <button type="button" onclick="showStance('life2')">お金は人生で最も重要？</button>
+        <button type="button" onclick="showStance('life3')">努力と才能、どちらが重要？</button>
       </div>
 
       <div class="category human">
         <p class="cat-label">人間関係</p>
-        <button onclick="showStance('human1')">正直であることは常に正しい？</button>
-        <button onclick="showStance('human2')">他人を完全に理解できるか？</button>
-        <button onclick="showStance('human3')">恋愛と友情、大事なのは？</button>
+        <button type="button" onclick="showStance('human1')">正直であることは常に正しい？</button>
+        <button type="button" onclick="showStance('human2')">他人を完全に理解できるか？</button>
+        <button type="button" onclick="showStance('human3')">恋愛と友情、大事なのは？</button>
       </div>
 
-      <div class="category custom">
-        <p class="cat-label">自由入力</p>
-        <div class="custom-input-group">
-          <input type="text" id="customThemeInput" placeholder="例：きのこ派 vs たけのこ派">
-          <button class="custom-start-btn" onclick="startCustomTheme()">このテーマで開始</button>
-        </div>
-      </div>
+      <button type="button" class="start-btn history-btn" onclick="showHistory()">対戦履歴を見る</button>
     </div>
-
-    <button class="back-link" onclick="showScreen('login-screen')">トップに戻る</button>
+    <button type="button" class="back-link" onclick="location.reload()">ログアウト</button>
   </div>
 
   <div id="stanceScreen" class="screen">
-    <h2 id="themeTitle"></h2>
-    <p>あなたの立場を選んでください</p>
-    <div id="stanceButtons"></div>
-    <button class="back-link" onclick="showScreen('theme-screen')">テーマ選択に戻る</button>
+    <h2 id="themeTitle" class="theme-title-display"></h2>
+    <p>あなたの立場を選んでください：</p>
+    <div id="stanceButtons" class="stance-container"></div>
+    <button type="button" class="back-link" onclick="showScreen('theme-screen')">戻る</button>
   </div>
 
   <div id="gameScreen" class="screen">
     <div class="game-header">
       <h3 id="themeText"></h3>
-      <p id="turnText"></p>
+      <p id="turnText">残りターン: --</p>
     </div>
     <div id="chat" class="chat-box"></div>
     <div class="input-area">
-      <textarea id="userInput" placeholder="あなたの意見を入力" rows="1"></textarea>
-      <button id="sendBtn" onclick="sendMessage()">送信</button>
+      <textarea id="userInput" placeholder="自分の意見を入力..." rows="1"></textarea>
+      <button type="button" id="sendBtn" onclick="sendMessage()">送信</button>
     </div>
-    <button class="finish-btn" onclick="confirmFinish()">議論を終了して結果を見る</button>
-    <button class="back-link" onclick="backToTitle()">中断してタイトルへ</button>
+    <button type="button" class="finish-btn" onclick="confirmFinish()">議論を終了して結果を見る</button>
   </div>
 
   <div id="resultScreen" class="screen">
-    <h1 class="result-title">ディベート終了</h1>
-    
-    <div id="scoreText" class="score" style="font-size: 60px; color: #4CAF50; font-weight: bold; margin: 20px 0;">--点</div>
-    
-    <div class="result-container" style="background: #f9f9f9; padding: 20px; border-radius: 10px; border-left: 5px solid #4CAF50; margin: 20px 0;">
-      <h3 style="margin-top: 0; color: #333;">🧠 性格・思考スタイル分析</h3>
-      <div id="commentText" class="comment" style="white-space: pre-wrap; text-align: left; line-height: 1.6; font-size: 16px;">
-        AIが分析中です...
-      </div>
-    </div>
+    <h1 class="result-title">ディベート結果</h1>
+    <div id="scoreText" class="score-display">--点</div>
+    <div id="commentText" class="result-comment">分析中...</div>
+    <button type="button" class="start-btn" onclick="showScreen('theme-screen')">ロビーに戻る</button>
+  </div>
 
-    <button class="start-btn" onclick="showScreen('login-screen')">タイトルに戻る</button>
+  <div id="historyScreen" class="screen">
+    <h2 class="screen-title">過去の対戦履歴</h2>
+    <div id="historyList" class="history-list"></div>
+    <button type="button" class="start-btn" onclick="showScreen('theme-screen')">戻る</button>
   </div>
 
 </div>

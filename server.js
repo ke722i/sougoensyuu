@@ -1,91 +1,108 @@
 require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
+const Datastore = require('nedb-promises');
+const bcrypt = require('bcrypt');
 
 const app = express();
 app.use(cors()); 
 app.use(express.json());
 
+// データベースの初期化 (自動的にファイルが作成されます)
+const usersDB = Datastore.create('users.db');
+const battlesDB = Datastore.create('battles.db');
+
 const MY_API_KEY = process.env.GEMINI_API_KEY; 
 
-app.get("/", (req, res) => {
-  res.send("<h1>🤖 Debate & MBTI AI Backend is Running!</h1><p>Status: Healthy</p>");
+// --- 認証 API ---
+
+// ユーザー登録
+app.post("/api/register", async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const existingUser = await usersDB.findOne({ username });
+    if (existingUser) return res.status(400).json({ error: "このユーザー名は既に使用されています。" });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    await usersDB.insert({ 
+      username, 
+      password: hashedPassword, 
+      mbti: "未診断", 
+      totalBattles: 0 
+    });
+    
+    res.json({ message: "登録が完了しました！", username });
+  } catch (error) {
+    res.status(500).json({ error: "登録に失敗しました。" });
+  }
 });
 
+// ログイン
+app.post("/api/login", async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const user = await usersDB.findOne({ username });
+    if (user && await bcrypt.compare(password, user.password)) {
+      res.json({ username: user.username, mbti: user.mbti });
+    } else {
+      res.status(401).json({ error: "ユーザー名またはパスワードが正しくありません。" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "ログインに失敗しました。" });
+  }
+});
+
+// --- 履歴保存 API ---
+
+app.post("/api/save-battle", async (req, res) => {
+  const { username, theme, score, mbti } = req.body;
+  try {
+    await battlesDB.insert({ username, theme, score, mbti, date: new Date() });
+    await usersDB.update({ username }, { $set: { mbti: mbti }, $inc: { totalBattles: 1 } });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: "データの保存に失敗しました。" });
+  }
+});
+
+app.get("/api/history/:username", async (req, res) => {
+  const history = await battlesDB.find({ username: req.params.username }).sort({ date: -1 });
+  res.json(history);
+});
+
+// --- メインディベート API ---
+
 app.post("/api", async (req, res) => {
-  const { message, theme, stance } = req.body;
+  const { message, theme, stance, username } = req.body;
+  const user = await usersDB.findOne({ username });
   
-  console.log(`\n--- New Request ---`);
-  console.log(`Theme: ${theme}`);
-  console.log(`Stance: ${stance}`);
-  console.log(`User:  ${message}`);
+  // ユーザーの過去のMBTIを記憶として注入
+  const memoryContext = user && user.mbti !== "未診断" 
+    ? `[過去の分析結果: このユーザーは過去に ${user.mbti} と診断されました。]`
+    : "";
 
   try {
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${MY_API_KEY}`;
 
-    // システムプロンプトの構築：終了時と通常時の挙動を厳格に分離
-    let systemInstruction = `あなたは親しみやすくも論理的なAIディベートパートナー兼、心理分析のエキスパートです。
-    現在のテーマは「${theme}」で、ユーザーは「${stance}」の立場です。
+    let systemInstruction = `${memoryContext}
+    あなたは論理的かつ親しみやすいAIディベーターです。
+    テーマ: ${theme} / ユーザーの立場: ${stance}
     
-    以下のガイドラインを「絶対の優先順位」として回答してください：
-    
-    1. 【最優先：終了判定】ユーザーの入力が「議論を終了する」「結果を見る」「最終判定に移る」といった終了の意志を含む場合：
-       - 以降の反論や深掘りする質問は「一切禁止」です。
-       - これまでの発言から推測されるMBTIタイプとその具体的な理由のみを150文字程度で詳しく解説してください。
-       - 回答の最後は必ず【MBTI：タイプ名】で締めてください。
-    
-    2. 【通常時：ディベート】議論が継続している場合：
-       - ユーザーの「${message}」に対して、論理的な反論や深掘りする質問を返してください。
-       - 100文字以内で、親しみやすい丁寧語（です・ます調）を使用してください。
-    
-    3. 【共通：MBTI分析】会話を通じて、ユーザーの思考パターン（論理的か感情的か、直感的か現実的か等）を常に蓄積・分析してください。
-    
-    4. 【共通：柔軟な対応】質問や挨拶には直接答え、不自然に議論を強制しないでください。
-    
-    ユーザーの入力内容：${message}`;
+    【ルール】
+    1. 終了の意志がある場合：反論を止め、MBTI診断結果を【MBTI：タイプ名】形式で含めて回答してください。
+    2. 継続中の場合：100文字以内で論理的な反論を返してください。`;
 
     const response = await fetch(apiUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: systemInstruction }]
-        }]
-      })
+      body: JSON.stringify({ contents: [{ parts: [{ text: systemInstruction }] }] })
     });
 
     const data = await response.json();
-
-    if (data.error) {
-      console.log("❌ Google API Error:", data.error.message);
-      return res.json({ reply: "Google API Error: " + data.error.message });
-    }
-
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (reply) {
-      console.log("✅ AI Reply Success!");
-      res.json({ reply });
-    } else {
-      res.json({ reply: "AIが返答を生成できませんでした。" });
-    }
-
+    res.json({ reply: data.candidates[0].content.parts[0].text });
   } catch (error) {
-    console.error("💥 Fetch Error:", error);
-    res.status(500).json({ reply: "サーバーエラーが発生しました。" });
+    res.status(500).json({ reply: "エラーが発生しました。" });
   }
 });
 
-const PORT = 3000;
-const LIVE_SERVER_PORT = 5500;
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("=========================================");
-  console.log("🚀 議論＆MBTI診断サーバー：起動完了");
-  console.log(`📡 Backend API: http://10.15.142.19:${PORT}/api`);
-  console.log("-----------------------------------------");
-  console.log("🎮 ステータス: 待機中...");  
-  console.log(`1. ブラウザでこちらにアクセス: http://10.15.142.19:${LIVE_SERVER_PORT}`);
-  console.log("   (または、index.htmlをダブルクリック。)");
-  console.log("=========================================");
-});
+app.listen(3000, "0.0.0.0", () => console.log("🚀 Server Ready"));
