@@ -1,27 +1,46 @@
-let gameData = {
-  theme: "",
-  stance: "",
-  turn: 5,
-  maxTurn: 5,
-  isWaiting: false
-};
+let currentUser = null;
+let gameData = { theme: "", stance: "", turn: 5, maxTurn: 5, isWaiting: false };
 
-// 画面切り替え
+// 画面切り替え関数
 function showScreen(id) {
   document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
-  document.getElementById(id).classList.add("active");
+  const target = document.getElementById(id);
+  if (target) target.classList.add("active");
 }
 
-// 自由入力テーマの開始
-function startCustomTheme() {
-  const input = document.getElementById("customThemeInput");
-  const theme = input.value.trim();
-  if (!theme) return alert("テーマを入力してください");
-  gameData.theme = theme;
-  startGame("中立・自由");
+// 認証処理 (ログイン・登録)
+async function handleAuth(type) {
+  const user = document.getElementById("authUser").value;
+  const pass = document.getElementById("authPass").value;
+
+  if (!user || !pass) return alert("ユーザー名とパスワードを入力してください");
+
+  try {
+    const response = await fetch(`http://10.15.142.19:3000/api/${type}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: user, password: pass })
+    });
+
+    const data = await response.json();
+    if (response.ok) {
+      currentUser = data.username;
+      // ユーザーバッジの更新
+      const badge = document.getElementById("userBadge");
+      if (badge) {
+        badge.innerText = `ログイン中: ${currentUser} (前回のMBTI: ${data.mbti || '未診断'})`;
+      }
+      showScreen('theme-screen');
+    } else {
+      alert(data.error || "認証に失敗しました");
+    }
+  } catch (error) {
+    console.error("Auth error:", error);
+    alert("サーバーに接続できません。server.jsが起動しているか確認してください。");
+  }
 }
 
-// 固定テーマの立場選択表示
+// テーマの表示と立場選択の生成
 function showStance(id) {
   const data = {
     ai1: { title: "AIは人間の知能を超える？", options: ["超える", "超えない"] },
@@ -34,15 +53,26 @@ function showStance(id) {
     human2: { title: "他人を完全に理解できるか？", options: ["できる", "できない"] },
     human3: { title: "恋愛と友情、大事なのは？", options: ["恋愛", "友情"] }
   };
+  
   const selected = data[id];
+  if (!selected) return;
+
   gameData.theme = selected.title;
   document.getElementById("themeTitle").innerText = selected.title;
+  
   const container = document.getElementById("stanceButtons");
   container.innerHTML = "";
+  
   selected.options.forEach(opt => {
     const btn = document.createElement("button");
+    btn.type = "button"; // フォーム送信によるリロードを防止
+    btn.className = "start-btn";
+    btn.style.margin = "5px";
     btn.innerText = opt;
-    btn.onclick = () => startGame(opt);
+    btn.onclick = (e) => {
+      e.preventDefault();
+      startGame(opt);
+    };
     container.appendChild(btn);
   });
   showScreen("stanceScreen");
@@ -52,175 +82,149 @@ function showStance(id) {
 function startGame(stance) {
   gameData.stance = stance;
   gameData.turn = gameData.maxTurn;
-  document.querySelector(".input-area").style.display = "flex";
-  document.querySelector(".finish-btn").style.display = "block";
+  
   document.getElementById("themeText").innerText = `テーマ: ${gameData.theme}`;
-  updateTurnDisplay();
+  document.getElementById("turnText").innerText = `残りターン: ${gameData.turn}`;
+  
   const chat = document.getElementById("chat");
   chat.innerHTML = "";
   
-  const initialMsg = stance === "中立・自由" 
-    ? `自由テーマ「${gameData.theme}」ですね。あなたの意見をどうぞ！` 
-    : `あなたは「${stance}」の立場ですね。議論を開始します。あなたの意見をどうぞ！`;
-    
-  addMessage("ai", initialMsg);
+  addMessage("ai", `${stance}の立場ですね。議論を始めましょう。意気込みをどうぞ！`);
   showScreen("gameScreen");
-  setTimeout(() => document.getElementById("userInput").focus(), 100);
-}
-
-// メッセージ表示
-function addMessage(type, text) {
-  const chat = document.getElementById("chat");
-  const msgDiv = document.createElement("div");
-  msgDiv.className = `message ${type}`;
-  msgDiv.innerHTML = `<div class="bubble">${text}</div>`;
-  chat.appendChild(msgDiv);
-  chat.scrollTop = chat.scrollHeight;
-}
-
-// ターン数表示更新
-function updateTurnDisplay() {
-  document.getElementById("turnText").innerText = `残りターン: ${gameData.turn}`;
 }
 
 // メッセージ送信
 async function sendMessage() {
   const input = document.getElementById("userInput");
-  const userText = input.value.trim();
-  if (!userText || gameData.isWaiting || gameData.turn <= 0) return;
-
-  addMessage("user", userText);
-  input.value = "";
-  input.style.height = "54px"; 
+  const text = input.value.trim();
   
-  gameData.turn--;
-  updateTurnDisplay();
-  gameData.isWaiting = true;
+  if (!text || gameData.isWaiting) return;
 
-  const loadingId = "load-" + Date.now();
-  const typingHtml = `
-    <div class="typing-container">
-      AIが考え中
-      <div class="dots">
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-      </div>
-    </div>
-  `;
-  addMessage("ai", `<span id="${loadingId}">${typingHtml}</span>`);
+  addMessage("user", text);
+  input.value = "";
+  gameData.turn--;
+  document.getElementById("turnText").innerText = `残りターン: ${gameData.turn}`;
+  gameData.isWaiting = true;
 
   try {
     const response = await fetch("http://10.15.142.19:3000/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
-        message: userText, 
+        message: text, 
         theme: gameData.theme, 
-        stance: gameData.stance 
+        stance: gameData.stance,
+        username: currentUser 
       })
     });
     
     const data = await response.json();
-    const loadingEl = document.getElementById(loadingId);
-    if (loadingEl) {
-      loadingEl.innerHTML = data.reply || "返信を取得できませんでした。";
-    }
-
+    addMessage("ai", data.reply);
+    
     if (gameData.turn <= 0) {
-      document.querySelector(".finish-btn").style.display = "none";
-      showResultButton();
+      addMessage("ai", "規定のターン数が終了しました。「結果を見る」ボタンを押して分析を確認してください。");
     }
   } catch (e) {
-    const loadingEl = document.getElementById(loadingId);
-    if (loadingEl) loadingEl.innerText = "接続エラー: サーバーが応答していません。";
+    addMessage("ai", "通信エラーが発生しました。サーバーの状態を確認してください。");
   } finally {
     gameData.isWaiting = false;
   }
 }
 
-// 結果を見るボタン表示
-function showResultButton() {
-  document.querySelector(".input-area").style.display = "none";
-  const chat = document.getElementById("chat");
-  const btn = document.createElement("button");
-  btn.innerText = "ディベートの結果を見る";
-  btn.className = "start-btn";
-  btn.style.margin = "20px auto";
-  btn.style.display = "block";
-  btn.onclick = showResult;
-  chat.appendChild(btn);
-  chat.scrollTop = chat.scrollHeight;
-}
-
-// 結果表示 (MBTI取得ロジックを追加)
+// 結果の生成とDBへの保存
 async function showResult() {
-  // 画面を切り替えて初期表示をセット
   showScreen("resultScreen");
-  document.getElementById("scoreText").innerText = "分析中...";
-  document.getElementById("commentText").innerText = "これまでの議論に基づき、あなたのMBTI性格タイプを分析しています...";
-
+  document.getElementById("scoreText").innerText = "AIが分析中...";
+  document.getElementById("commentText").innerText = "";
+  
   try {
-    // サーバーに診断結果（MBTI）をリクエスト
     const response = await fetch("http://10.15.142.19:3000/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
-        message: "議論を終了します。これまでの私の意見や対話スタイルから推測されるMBTIタイプとその理由、および議論の総評を教えてください。", 
+        message: "議論を終了して結果を表示してください。", 
         theme: gameData.theme,
-        stance: gameData.stance
+        stance: gameData.stance,
+        username: currentUser 
       })
     });
-
+    
     const data = await response.json();
+    const score = Math.floor(Math.random() * 41) + 60; // 60-100点のランダムスコア
     
-    // スコアの演出 (60-99点)
-    const score = Math.floor(Math.random() * 40) + 60;
     document.getElementById("scoreText").innerText = `${score}点`;
-    
-    // AIからの診断結果を反映
-    if (data.reply) {
-      document.getElementById("commentText").innerText = data.reply;
-    } else {
-      document.getElementById("commentText").innerText = "診断結果を取得できませんでした。";
-    }
+    document.getElementById("commentText").innerText = data.reply;
 
+    // MBTIタイプの抽出
+    const mbtiMatch = data.reply.match(/【MBTI：(.+?)】/);
+    const mbtiType = mbtiMatch ? mbtiMatch[1] : "分析不能";
+
+    // 結果をデータベースに保存
+    await fetch("http://10.15.142.19:3000/api/save-battle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        username: currentUser, 
+        theme: gameData.theme, 
+        score, 
+        mbti: mbtiType 
+      })
+    });
   } catch (e) {
-    console.error("Result fetch error:", e);
-    document.getElementById("scoreText").innerText = "Error";
-    document.getElementById("commentText").innerText = "サーバーとの接続に失敗しました。";
+    document.getElementById("commentText").innerText = "結果の取得中にエラーが発生しました。";
   }
 }
 
-// 途中終了確認
+// 履歴の取得と表示
+async function showHistory() {
+  if (!currentUser) return;
+  showScreen("historyScreen");
+  
+  try {
+    const res = await fetch(`http://10.15.142.19:3000/api/history/${currentUser}`);
+    const history = await res.json();
+    const list = document.getElementById("historyList");
+    
+    if (history.length === 0) {
+      list.innerHTML = "<p style='text-align:center;'>まだ対戦履歴がありません。</p>";
+      return;
+    }
+
+    list.innerHTML = history.map(h => `
+      <div class="history-item" style="background:#fff; padding:15px; margin:10px 0; border-radius:10px; border-left: 5px solid #4CAF50;">
+        <small>${new Date(h.date).toLocaleDateString()}</small>
+        <p><strong>テーマ:</strong> ${h.theme}</p>
+        <p><strong>スコア:</strong> ${h.score}点 | <strong>MBTI:</strong> ${h.mbti}</p>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error("History fetch error:", e);
+  }
+}
+
+// チャットメッセージの追加
+function addMessage(type, text) {
+  const chat = document.getElementById("chat");
+  const div = document.createElement("div");
+  div.className = `message ${type}`;
+  div.innerHTML = `<div class="bubble">${text}</div>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// 議論を終了する前の確認（ユーザーがボタンを押した場合）
 function confirmFinish() {
-  if (confirm("まだターンが残っていますが、議論を終了して結果を表示しますか？")) {
-    document.querySelector(".input-area").style.display = "none";
-    document.querySelector(".finish-btn").style.display = "none";
+  if (confirm("議論を終了して、あなたのMBTI診断結果を見ますか？")) {
     showResult();
   }
 }
 
-// タイトルへ戻る
-function backToTitle() {
-  if (confirm("タイトルに戻ります。現在の議論内容は破棄されますがよろしいですか？")) {
-    showScreen("login-screen");
+// --- リフレッシュ対策 (FIXED) ---
+window.onbeforeunload = function(e) {
+  const gameScreen = document.getElementById("gameScreen");
+  // ゲーム中（gameScreenがactive）の時だけ警告を出す
+  if (gameScreen && gameScreen.classList.contains("active")) {
+    e.preventDefault();
+    return "議論の途中でページを離れると、現在のデータが失われます。";
   }
-}
-
-// イベントリスナーの設定
-document.addEventListener("DOMContentLoaded", () => {
-  const input = document.getElementById("userInput");
-
-  input.addEventListener("input", function() {
-    this.style.height = "auto";
-    this.style.height = (this.scrollHeight) + "px";
-  });
-
-  input.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-});
+};
