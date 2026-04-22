@@ -28,7 +28,7 @@ async function handleAuth(type) {
       // ユーザーバッジの更新
       const badge = document.getElementById("userBadge");
       if (badge) {
-        badge.innerText = `ログイン中: ${currentUser} (前回のMBTI: ${data.mbti || '未診断'})`;
+        badge.innerText = `ログイン中: ${currentUser} (前回のMBTI: ${data.mbti || '未診断'}, 平均点: ${data.averageScore || 0}点)`;
       }
       showScreen('theme-screen');
     } else {
@@ -181,16 +181,26 @@ async function showHistory() {
   showScreen("historyScreen");
   
   try {
+    // 履歴を取得
     const res = await fetch(`http://10.15.142.19:3000/api/history/${currentUser}`);
     const history = await res.json();
+    
+    // 平均点を取得
+    const avgRes = await fetch(`http://10.15.142.19:3000/api/average/${currentUser}`);
+    const avgData = await avgRes.json();
+    const averageScore = avgData.averageScore || 0;
+    
     const list = document.getElementById("historyList");
     
     if (history.length === 0) {
-      list.innerHTML = "<p style='text-align:center;'>まだ対戦履歴がありません。</p>";
+      list.innerHTML = `<p style='text-align:center;'>まだ対戦履歴がありません。</p><p style='text-align:center;'>平均点: ${averageScore}点</p>`;
       return;
     }
 
-    list.innerHTML = history.map(h => `
+    // 平均点を上部に表示
+    const averageDisplay = `<div style="text-align:center; margin-bottom:20px; font-size:1.2rem; font-weight:bold;">平均点: ${averageScore}点</div>`;
+    
+    list.innerHTML = averageDisplay + history.map(h => `
       <div class="history-item" style="background:#fff; padding:15px; margin:10px 0; border-radius:10px; border-left: 5px solid #4CAF50;">
         <small>${new Date(h.date).toLocaleDateString()}</small>
         <p><strong>テーマ:</strong> ${h.theme}</p>

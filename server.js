@@ -12,6 +12,9 @@ app.use(express.json());
 const usersDB = Datastore.create('users.db');
 const battlesDB = Datastore.create('battles.db');
 
+// ユーザーテーブルにusernameのユニークインデックスを設定
+usersDB.ensureIndex({ fieldName: 'username', unique: true });
+
 const MY_API_KEY = process.env.GEMINI_API_KEY; 
 
 // --- 認証 API ---
@@ -43,7 +46,7 @@ app.post("/api/login", async (req, res) => {
   try {
     const user = await usersDB.findOne({ username });
     if (user && await bcrypt.compare(password, user.password)) {
-      res.json({ username: user.username, mbti: user.mbti });
+      res.json({ username: user.username, mbti: user.mbti, averageScore: user.averageScore || 0 });
     } else {
       res.status(401).json({ error: "ユーザー名またはパスワードが正しくありません。" });
     }
@@ -58,7 +61,7 @@ app.post("/api/save-battle", async (req, res) => {
   const { username, theme, score, mbti } = req.body;
   try {
     await battlesDB.insert({ username, theme, score, mbti, date: new Date() });
-    await usersDB.update({ username }, { $set: { mbti: mbti }, $inc: { totalBattles: 1 } });
+    await usersDB.update({ username }, { $set: { mbti: mbti }, $inc: { totalBattles: 1, totalScore: score } });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "データの保存に失敗しました。" });
@@ -70,7 +73,19 @@ app.get("/api/history/:username", async (req, res) => {
   res.json(history);
 });
 
-// --- メインディベート API ---
+// 平均点取得API
+app.get("/api/average/:username", async (req, res) => {
+  try {
+    const user = await usersDB.findOne({ username: req.params.username });
+    if (user) {
+      res.json({ averageScore: user.averageScore || 0 });
+    } else {
+      res.status(404).json({ error: "ユーザーが見つかりません。" });
+    }
+  } catch (error) {
+    res.status(500).json({ error: "平均点の取得に失敗しました。" });
+  }
+});
 
 app.post("/api", async (req, res) => {
   const { message, theme, stance, username } = req.body;
