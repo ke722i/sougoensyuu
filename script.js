@@ -25,7 +25,6 @@ async function handleAuth(type) {
     const data = await response.json();
     if (response.ok) {
       currentUser = data.username;
-      // ユーザーバッジの更新
       const badge = document.getElementById("userBadge");
       if (badge) {
         badge.innerText = `ログイン中: ${currentUser} (前回のMBTI: ${data.mbti || '未診断'}, 平均点: ${data.averageScore || 0}点)`;
@@ -44,14 +43,14 @@ async function handleAuth(type) {
 function showStance(id) {
   const data = {
     ai1: { title: "AIは人間の知能を超える？", options: ["超える", "超えない"] },
-    ai2: { title: "AIと人間、どちらが信頼できる？", options: ["AI", "人間"] },
+    ai2: { title: "AIと人間, どちらが信頼できる？", options: ["AI", "人間"] },
     ai3: { title: "AIで人間は幸せになる？", options: ["幸せになる", "ならない"] },
     life1: { title: "安定した人生を選ぶべき？", options: ["選ぶべき", "挑戦すべき"] },
     life2: { title: "お金は人生で最も重要？", options: ["重要", "そうではない"] },
-    life3: { title: "努力と才能、どちらが重要？", options: ["努力", "才能"] },
+    life3: { title: "努力と才能, どちらが重要？", options: ["努力", "才能"] },
     human1: { title: "正直であることは常に正しい？", options: ["正しい", "場合による"] },
     human2: { title: "他人を完全に理解できるか？", options: ["できる", "できない"] },
-    human3: { title: "恋愛と友情、大事なのは？", options: ["恋愛", "友情"] }
+    human3: { title: "恋愛と友情, 大事なのは？", options: ["恋愛", "友情"] }
   };
   
   const selected = data[id];
@@ -65,7 +64,7 @@ function showStance(id) {
   
   selected.options.forEach(opt => {
     const btn = document.createElement("button");
-    btn.type = "button"; // フォーム送信によるリロードを防止
+    btn.type = "button";
     btn.className = "start-btn";
     btn.style.margin = "5px";
     btn.innerText = opt;
@@ -93,17 +92,16 @@ function startGame(stance) {
   showScreen("gameScreen");
 }
 
-// メッセージ送信
+// メッセージ送信 (APIエラー時にターンが減らないように修正)
 async function sendMessage() {
   const input = document.getElementById("userInput");
   const text = input.value.trim();
   
   if (!text || gameData.isWaiting) return;
 
+  // ユーザーのメッセージを先に表示
   addMessage("user", text);
   input.value = "";
-  gameData.turn--;
-  document.getElementById("turnText").innerText = `残りターン: ${gameData.turn}`;
   gameData.isWaiting = true;
 
   try {
@@ -119,22 +117,34 @@ async function sendMessage() {
     });
     
     const data = await response.json();
-    addMessage("ai", data.reply);
     
-    if (gameData.turn <= 0) {
-      addMessage("ai", "規定のターン数が終了しました。「結果を見る」ボタンを押して分析を確認してください。");
+    // 成功した場合のみ、AIのメッセージを表示しターンを減らす
+    if (response.ok && data.reply) {
+      addMessage("ai", data.reply);
+      
+      // ここでターンをカウントダウン
+      gameData.turn--;
+      document.getElementById("turnText").innerText = `残りターン: ${gameData.turn}`;
+      
+      if (gameData.turn <= 0) {
+        addMessage("ai", "規定のターン数が終了しました。「結果を見る」ボタンを押して分析を確認してください。");
+      }
+    } else {
+      // API側でエラーメッセージが返ってきた場合
+      addMessage("ai", "AIが少し疲れているようです。もう一度同じ内容を送ってみてください。");
     }
   } catch (e) {
-    addMessage("ai", "通信エラーが発生しました。サーバーの状態を確認してください。");
+    // ネットワークエラー等の場合
+    addMessage("ai", "通信エラーが発生しました。サーバーが動いているか確認してください。");
   } finally {
     gameData.isWaiting = false;
   }
 }
 
-// 結果の生成とDBへの保存
+// 結果の生成とDBへの保存 (AIによる本物の採点対応)
 async function showResult() {
   showScreen("resultScreen");
-  document.getElementById("scoreText").innerText = "AIが分析中...";
+  document.getElementById("scoreText").innerText = "AIによる厳正な採点中...";
   document.getElementById("commentText").innerText = "";
   
   try {
@@ -142,35 +152,40 @@ async function showResult() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
-        message: "議論を終了して結果を表示してください。", 
-        theme: gameData.theme,
+        message: "結果を表示してください。", 
+        theme: gameData.theme, 
         stance: gameData.stance,
         username: currentUser 
       })
     });
     
     const data = await response.json();
-    const score = Math.floor(Math.random() * 41) + 60; // 60-100点のランダムスコア
     
-    document.getElementById("scoreText").innerText = `${score}点`;
-    document.getElementById("commentText").innerText = data.reply;
+    // AIの返答からスコアを抽出
+    const scoreMatch = data.reply.match(/【合計点：(\d+)点】/);
+    const score = scoreMatch ? parseInt(scoreMatch[1]) : 0; 
 
     // MBTIタイプの抽出
     const mbtiMatch = data.reply.match(/【MBTI：(.+?)】/);
     const mbtiType = mbtiMatch ? mbtiMatch[1] : "分析不能";
 
-    // 結果をデータベースに保存
+    // 画面表示
+    document.getElementById("scoreText").innerText = `${score}点`;
+    document.getElementById("commentText").innerText = data.reply;
+
+    // データベースに保存
     await fetch("http://10.15.142.19:3000/api/save-battle", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
         username: currentUser, 
         theme: gameData.theme, 
-        score, 
+        score: score, 
         mbti: mbtiType 
       })
     });
   } catch (e) {
+    console.error(e);
     document.getElementById("commentText").innerText = "結果の取得中にエラーが発生しました。";
   }
 }
@@ -222,17 +237,16 @@ function addMessage(type, text) {
   chat.scrollTop = chat.scrollHeight;
 }
 
-// 議論を終了する前の確認（ユーザーがボタンを押した場合）
+// 議論を終了する前の確認
 function confirmFinish() {
-  if (confirm("議論を終了して、あなたのMBTI診断結果を見ますか？")) {
+  if (confirm("議論を終了して、AIの採点とMBTI診断結果を見ますか？")) {
     showResult();
   }
 }
 
-// --- リフレッシュ対策 (FIXED) ---
+// --- リフレッシュ対策 ---
 window.onbeforeunload = function(e) {
   const gameScreen = document.getElementById("gameScreen");
-  // ゲーム中（gameScreenがactive）の時だけ警告を出す
   if (gameScreen && gameScreen.classList.contains("active")) {
     e.preventDefault();
     return "議論の途中でページを離れると、現在のデータが失われます。";
