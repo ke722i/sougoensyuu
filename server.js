@@ -1,19 +1,49 @@
 require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
-const Datastore = require('nedb-promises');
+const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// データベースの初期化
-const usersDB = Datastore.create('users.db');
-const battlesDB = Datastore.create('battles.db');
+// PostgreSQL接続プール
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
-// ユーザーテーブルにusernameのユニークインデックスを設定
-usersDB.ensureIndex({ fieldName: 'username', unique: true });
+// データベースの初期化（テーブル作成）
+async function initDB() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(255) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL,
+        mbti VARCHAR(10) DEFAULT '未診断',
+        totalBattles INTEGER DEFAULT 0,
+        totalScore INTEGER DEFAULT 0,
+        averageScore FLOAT DEFAULT 0
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS battles (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(255) NOT NULL,
+        theme VARCHAR(255) NOT NULL,
+        score INTEGER NOT NULL,
+        mbti VARCHAR(10) NOT NULL,
+        date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('Database initialized');
+  } catch (error) {
+    console.error('Database initialization error:', error);
+  }
+}
+
+initDB();
 
 const MY_API_KEY = process.env.GEMINI_API_KEY; 
 
@@ -22,16 +52,11 @@ const MY_API_KEY = process.env.GEMINI_API_KEY;
 app.post("/api/register", async (req, res) => {
     const { username, password } = req.body;
     try {
-        const existingUser = await usersDB.findOne({ username });
-        if (existingUser) return res.status(400).json({ error: "このユーザー名は既に使用されています。" });
+        const existingUser = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        if (existingUser.rows.length > 0) return res.status(400).json({ error: "このユーザー名は既に使用されています。" });
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        await usersDB.insert({
-            username,
-            password: hashedPassword,
-            mbti: "未診断",
-            totalBattles: 0
-        });
+        await pool.query('INSERT INTO users (username, password) VALUES ($1, $2)', [username, hashedPassword]);
         res.json({ message: "登録が完了しました！", username });
     } catch (error) {
         res.status(500).json({ error: "登録に失敗しました。" });
@@ -41,9 +66,10 @@ app.post("/api/register", async (req, res) => {
 app.post("/api/login", async (req, res) => {
    const { username, password } = req.body;
     try {
-        const user = await usersDB.findOne({ username });
+        const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        const user = result.rows[0];
         if (user && await bcrypt.compare(password, user.password)) {
-            res.json({ username: user.username, mbti: user.mbti, averageScore: user.averageScore || 0 });
+            res.json({ username: user.username, mbti: user.mbti, averageScore: user.averagescore || 0 });
         } else {
             res.status(401).json({ error: "ユーザー名またはパスワードが正しくありません。" });
         }
@@ -57,8 +83,8 @@ app.post("/api/login", async (req, res) => {
 app.post("/api/save-battle", async (req, res) => {
   const { username, theme, score, mbti } = req.body;
   try {
-    await battlesDB.insert({ username, theme, score, mbti, date: new Date() });
-    await usersDB.update({ username }, { $set: { mbti: mbti }, $inc: { totalBattles: 1, totalScore: score } });
+    await pool.query('INSERT INTO battles (username, theme, score, mbti) VALUES ($1, $2, $3, $4)', [username, theme, score, mbti]);
+    await pool.query('UPDATE users SET mbti = $1, totalBattles = totalBattles + 1, totalScore = totalScore + $2, averageScore = (totalScore + $2) / (totalBattles + 1) WHERE username = $3', [mbti, score, username]);
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "データの保存に失敗しました。" });
@@ -66,16 +92,20 @@ app.post("/api/save-battle", async (req, res) => {
 });
 
 app.get("/api/history/:username", async (req, res) => {
-    const history = await battlesDB.find({ username: req.params.username }).sort({ date: -1 });
-    res.json(history);
+    try {
+        const result = await pool.query('SELECT * FROM battles WHERE username = $1 ORDER BY date DESC', [req.params.username]);
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ error: "履歴の取得に失敗しました。" });
+    }
 });
 
 // 平均点取得API
 app.get("/api/average/:username", async (req, res) => {
   try {
-    const user = await usersDB.findOne({ username: req.params.username });
-    if (user) {
-      res.json({ averageScore: user.averageScore || 0 });
+    const result = await pool.query('SELECT averageScore FROM users WHERE username = $1', [req.params.username]);
+    if (result.rows.length > 0) {
+      res.json({ averageScore: result.rows[0].averagescore || 0 });
     } else {
       res.status(404).json({ error: "ユーザーが見つかりません。" });
     }
@@ -86,13 +116,14 @@ app.get("/api/average/:username", async (req, res) => {
 
 app.post("/api", async (req, res) => {
     const { message, theme, stance, username } = req.body;
-    const user = await usersDB.findOne({ username });
-
-    const memoryContext = user && user.mbti !== "未診断"
-        ? `[過去の傾向: ${user.mbti}]`
-        : "";
-
     try {
+        const result = await pool.query('SELECT mbti FROM users WHERE username = $1', [username]);
+        const user = result.rows[0];
+
+        const memoryContext = user && user.mbti !== "未診断"
+            ? `[過去の傾向: ${user.mbti}]`
+            : "";
+
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${MY_API_KEY}`;
 
         let systemInstruction = `あなたは厳格なAIディベーター兼採点官です。
