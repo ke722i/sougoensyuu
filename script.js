@@ -16,7 +16,7 @@ async function handleAuth(type) {
   if (!user || !pass) return alert("ユーザー名とパスワードを入力してください");
 
   try {
-    const response = await fetch(`http://10.15.142.19:3000/api/${type}`, {
+    const response = await fetch(`/api/${type}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: user, password: pass })
@@ -105,7 +105,7 @@ async function sendMessage() {
   gameData.isWaiting = true;
 
   try {
-    const response = await fetch("http://10.15.142.19:3000/api", {
+    const response = await fetch("/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
@@ -148,7 +148,7 @@ async function showResult() {
   document.getElementById("commentText").innerText = "";
   
   try {
-    const response = await fetch("http://10.15.142.19:3000/api", {
+    const response = await fetch("/api", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
@@ -174,7 +174,7 @@ async function showResult() {
     document.getElementById("commentText").innerText = data.reply;
 
     // データベースに保存
-    await fetch("http://10.15.142.19:3000/api/save-battle", {
+    await fetch("/api/save-battle", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ 
@@ -197,11 +197,11 @@ async function showHistory() {
   
   try {
     // 履歴を取得
-    const res = await fetch(`http://10.15.142.19:3000/api/history/${currentUser}`);
+    const res = await fetch(`/api/history/${currentUser}`);
     const history = await res.json();
     
     // 平均点を取得
-    const avgRes = await fetch(`http://10.15.142.19:3000/api/average/${currentUser}`);
+    const avgRes = await fetch(`/api/average/${currentUser}`);
     const avgData = await avgRes.json();
     const averageScore = avgData.averageScore || 0;
     
