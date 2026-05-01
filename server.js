@@ -16,27 +16,121 @@ const pool = new Pool({
 // データベースの初期化（テーブル作成）
 async function initDB() {
   try {
+    // まず、postgresデータベースに接続してデータベースを作成（存在しない場合のみ）
+    const tempPool = new Pool({
+      connectionString: process.env.DATABASE_URL.replace('/sougoensyuu_db', '/postgres'),
+    });
+    
+    try {
+      await tempPool.query('CREATE DATABASE sougoensyuu_db');
+    } catch (err) {
+      // データベースが既に存在する場合はエラーを無視
+      if (err.code !== '42P04') {
+        throw err;
+      }
+    }
+    await tempPool.end();
+
+    // 既存のテーブルを削除
+    await pool.query('DROP TABLE IF EXISTS battles');
+    await pool.query('DROP TABLE IF EXISTS users');
+
+    // 新しいuser_tableを作成（存在しない場合のみ）
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        mbti VARCHAR(10) DEFAULT '未診断',
-        totalBattles INTEGER DEFAULT 0,
-        totalScore INTEGER DEFAULT 0,
-        averageScore FLOAT DEFAULT 0
+      CREATE TABLE IF NOT EXISTS user_table (
+        user_ID SERIAL PRIMARY KEY,
+        name VARCHAR(50) UNIQUE NOT NULL,
+        password VARCHAR(255) NOT NULL
       );
     `);
+
+    // log_tableを作成（存在しない場合のみ）
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS battles (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255) NOT NULL,
+      CREATE TABLE IF NOT EXISTS log_table (
+        discussions_ID SERIAL PRIMARY KEY,
+        user_ID INTEGER NOT NULL REFERENCES user_table(user_ID),
+        mbti CHAR(4) NOT NULL,
+        date_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         theme VARCHAR(255) NOT NULL,
-        score INTEGER NOT NULL,
-        mbti VARCHAR(10) NOT NULL,
-        date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        sum_score INTEGER DEFAULT 0,
+        game_result VARCHAR(50) NOT NULL
       );
     `);
+
+    // chat_log_tableを作成（存在しない場合のみ）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chat_log_table (
+        chat_id SERIAL PRIMARY KEY,
+        discussion_ID INTEGER NOT NULL REFERENCES log_table(discussions_ID),
+        chat_log TEXT NOT NULL
+      );
+    `);
+
+    // week_record_tableを作成（存在しない場合のみ）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS week_record_table (
+        week_identification_number SERIAL PRIMARY KEY,
+        user_ID INTEGER NOT NULL REFERENCES user_table(user_ID),
+        week_sum_score INTEGER DEFAULT 0 NOT NULL,
+        week_discussion_count INTEGER DEFAULT 0 NOT NULL,
+        week_average_score DECIMAL(5,2) DEFAULT 0.00,
+        target_week DATE NOT NULL
+      );
+    `);
+
+    // user_information_tableを作成（存在しない場合のみ）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS user_information_table (
+        user_ID INTEGER NOT NULL PRIMARY KEY REFERENCES user_table(user_ID),
+        average_score INTEGER NOT NULL,
+        general_score INTEGER NOT NULL,
+        winning_rate DECIMAL(5,2) NOT NULL,
+        discussions_count INTEGER NOT NULL,
+        best_score INTEGER NOT NULL,
+        mbti_total CHAR(4) NOT NULL
+      );
+    `);
+
+    // log_score_tableを作成（存在しない場合のみ）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS log_score_table (
+        score_id SERIAL PRIMARY KEY,
+        discussions_ID INTEGER NOT NULL REFERENCES log_table(discussions_ID),
+        user_ID INTEGER NOT NULL REFERENCES user_table(user_ID),
+        logic_score INTEGER DEFAULT 0,
+        evidence_score INTEGER DEFAULT 0,
+        rebuttal_score INTEGER DEFAULT 0,
+        consistency_score INTEGER DEFAULT 0,
+        persuasion_score INTEGER DEFAULT 0,
+        expression_score INTEGER DEFAULT 0,
+        sum_score INTEGER DEFAULT 0
+      );
+    `);
+
+    // year_record_tableを作成（存在しない場合のみ）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS year_record_table (
+        year_discussion_number SERIAL PRIMARY KEY,
+        user_ID INTEGER NOT NULL REFERENCES user_table(user_ID),
+        year_sum_score INTEGER DEFAULT 0 NOT NULL,
+        year_discussion_count INTEGER DEFAULT 0 NOT NULL,
+        year_average_score DECIMAL(5,2) DEFAULT 0.00,
+        target_year DATE NOT NULL
+      );
+    `);
+
+    // month_record_tableを作成（存在しない場合のみ）
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS month_record_table (
+        month_discussion_number SERIAL PRIMARY KEY,
+        user_ID INTEGER NOT NULL REFERENCES user_table(user_ID),
+        month_sum_score INTEGER DEFAULT 0 NOT NULL,
+        month_discussion_count INTEGER DEFAULT 0 NOT NULL,
+        month_average_score DECIMAL(5,2) DEFAULT 0.00,
+        target_month DATE NOT NULL
+      );
+    `);
+
     console.log('Database initialized');
   } catch (error) {
     console.error('Database initialization error:', error);
@@ -52,11 +146,11 @@ const MY_API_KEY = process.env.GEMINI_API_KEY;
 app.post("/api/register", async (req, res) => {
     const { username, password } = req.body;
     try {
-        const existingUser = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        const existingUser = await pool.query('SELECT * FROM user_table WHERE name = $1', [username]);
         if (existingUser.rows.length > 0) return res.status(400).json({ error: "このユーザー名は既に使用されています。" });
 
         const hashedPassword = await bcrypt.hash(password, 10);
-        await pool.query('INSERT INTO users (username, password) VALUES ($1, $2)', [username, hashedPassword]);
+        await pool.query('INSERT INTO user_table (name, password) VALUES ($1, $2)', [username, hashedPassword]);
         res.json({ message: "登録が完了しました！", username });
     } catch (error) {
         res.status(500).json({ error: "登録に失敗しました。" });
@@ -66,10 +160,10 @@ app.post("/api/register", async (req, res) => {
 app.post("/api/login", async (req, res) => {
    const { username, password } = req.body;
     try {
-        const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+        const result = await pool.query('SELECT * FROM user_table WHERE name = $1', [username]);
         const user = result.rows[0];
         if (user && await bcrypt.compare(password, user.password)) {
-            res.json({ username: user.username, mbti: user.mbti, averageScore: user.averagescore || 0 });
+            res.json({ username: user.name });
         } else {
             res.status(401).json({ error: "ユーザー名またはパスワードが正しくありません。" });
         }
@@ -83,8 +177,17 @@ app.post("/api/login", async (req, res) => {
 app.post("/api/save-battle", async (req, res) => {
   const { username, theme, score, mbti } = req.body;
   try {
-    await pool.query('INSERT INTO battles (username, theme, score, mbti) VALUES ($1, $2, $3, $4)', [username, theme, score, mbti]);
-    await pool.query('UPDATE users SET mbti = $1, totalBattles = totalBattles + 1, totalScore = totalScore + $2, averageScore = (totalScore + $2) / (totalBattles + 1) WHERE username = $3', [mbti, score, username]);
+    // user_IDを取得
+    const userResult = await pool.query('SELECT user_ID FROM user_table WHERE name = $1', [username]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: "ユーザーが見つかりません。" });
+    }
+    const user_ID = userResult.rows[0].user_id;
+
+    // log_tableに保存
+    await pool.query('INSERT INTO log_table (user_ID, mbti, theme, sum_score, game_result) VALUES ($1, $2, $3, $4, $5)',
+      [user_ID, mbti, theme, score, 'completed']); // game_resultは仮に'completed'を設定
+
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: "データの保存に失敗しました。" });
@@ -93,7 +196,15 @@ app.post("/api/save-battle", async (req, res) => {
 
 app.get("/api/history/:username", async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM battles WHERE username = $1 ORDER BY date DESC', [req.params.username]);
+        // user_IDを取得
+        const userResult = await pool.query('SELECT user_ID FROM user_table WHERE name = $1', [req.params.username]);
+        if (userResult.rows.length === 0) {
+            return res.status(404).json({ error: "ユーザーが見つかりません。" });
+        }
+        const user_ID = userResult.rows[0].user_id;
+
+        // log_tableから履歴を取得
+        const result = await pool.query('SELECT * FROM log_table WHERE user_ID = $1 ORDER BY date_time DESC', [user_ID]);
         res.json(result.rows);
     } catch (error) {
         res.status(500).json({ error: "履歴の取得に失敗しました。" });
@@ -103,12 +214,17 @@ app.get("/api/history/:username", async (req, res) => {
 // 平均点取得API
 app.get("/api/average/:username", async (req, res) => {
   try {
-    const result = await pool.query('SELECT averageScore FROM users WHERE username = $1', [req.params.username]);
-    if (result.rows.length > 0) {
-      res.json({ averageScore: result.rows[0].averagescore || 0 });
-    } else {
-      res.status(404).json({ error: "ユーザーが見つかりません。" });
+    // user_IDを取得
+    const userResult = await pool.query('SELECT user_ID FROM user_table WHERE name = $1', [req.params.username]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: "ユーザーが見つかりません。" });
     }
+    const user_ID = userResult.rows[0].user_id;
+
+    // log_tableから平均点を計算
+    const result = await pool.query('SELECT AVG(sum_score) as averageScore FROM log_table WHERE user_ID = $1', [user_ID]);
+    const averageScore = result.rows[0].averagescore || 0;
+    res.json({ averageScore: Math.round(averageScore) });
   } catch (error) {
     res.status(500).json({ error: "平均点の取得に失敗しました。" });
   }
@@ -117,12 +233,10 @@ app.get("/api/average/:username", async (req, res) => {
 app.post("/api", async (req, res) => {
     const { message, theme, stance, username } = req.body;
     try {
-        const result = await pool.query('SELECT mbti FROM users WHERE username = $1', [username]);
+        const result = await pool.query('SELECT 1 FROM user_table WHERE name = $1', [username]);
         const user = result.rows[0];
 
-        const memoryContext = user && user.mbti !== "未診断"
-            ? `[過去の傾向: ${user.mbti}]`
-            : "";
+        const memoryContext = "";
 
         const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${MY_API_KEY}`;
 
