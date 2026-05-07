@@ -1,0 +1,12 @@
+◇ injected env (2) from .env // tip: ⌘ suppress logs { quiet: true }
+[DB] 接続成功: sougoensyuu_db
+[TABLE] user_table: 既に存在しています
+[TABLE] log_table: 既に存在しています
+[TABLE] chat_log_table: 既に存在しています
+[TABLE] week_record_table: 既に存在しています
+[TABLE] user_information_table: 既に存在しています
+[TABLE] log_score_table: 既に存在しています
+[TABLE] year_record_table: 既に存在しています
+[TABLE] month_record_table: 既に存在しています
+[DB] 初期化チェックが完了しました
+Server started: http://localhost:3000
