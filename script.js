@@ -1,4 +1,6 @@
 ﻿let currentUser = null;
+let currentUserIcon = "icon1";
+let selectedIcon = "icon1";
 let currentDebateId = null;
 let gameData = { theme: '', stance: '', turn: 5, maxTurn: 5, isWaiting: false };
 let modalCallback = null;
@@ -12,6 +14,40 @@ const backgrounds = {
   'resultScreen': 'url("back_png/back_04.jpg")',
   'ranking-screen': 'url("back_png/back_02.jpg")',
   'history-screen': 'url("back_png/back_02.jpg")'
+};
+
+/* =========================================
+   アイコン画像設定
+   ここに画像パスを入力してください
+========================================= */
+
+const iconData = {
+
+  icon1: {
+    menu: "icon_png/01_hiyoko.png", // ←右上アイコン画像
+    character: "icon_png/02_hiyoko.png" // ←チャット画面画像
+  },
+
+  icon2: {
+    menu: "icon_png/03_risu.png",
+    character: "icon_png/04_risu.png"
+  },
+
+  icon3: {
+    menu: "icon_png/05_pengin.png",
+    character: "icon_png/06_pengin.png"
+  },
+
+  icon4: {
+    menu: "icon_png/07_gorira.png",
+    character: "icon_png/08_gorira.png"
+  },
+
+  icon5: {
+    menu: "icon_png/09_ma-motto.png",
+    character: "icon_png/10_ma-motto.png"
+  }
+
 };
 
 function showScreen(id) {
@@ -32,13 +68,36 @@ function showScreen(id) {
 }
 
 function updateUserIDDisplay(userId) {
+
   const badge = document.getElementById('user-display');
   const menuId = document.getElementById('menu-user-id');
+
+  // 右上アイコン
+  const userIcon = document.getElementById('headerUserIcon');
+
   if (userId) {
+
     if (badge) badge.style.display = 'flex';
-    if (menuId) menuId.innerText = `${userId} さん`;
-  } else if (badge) {
-    badge.style.display = 'none';
+
+    if (menuId) {
+      menuId.innerText = `${userId} さん`;
+    }
+
+    // アイコン変更
+    if (userIcon && iconData[currentUserIcon]) {
+      userIcon.src = iconData[currentUserIcon].menu;
+    }
+
+  } else {
+
+    if (badge) {
+      badge.style.display = 'none';
+    }
+
+    // アイコンをリセット
+    if (userIcon) {
+      userIcon.src = "";
+    }
   }
 }
 
@@ -68,14 +127,20 @@ async function handleSignup() {
   try {
     const res = await fetch('/api/register', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({
+        username,
+        password,
+        icon: selectedIcon
+      })
     });
     const data = await res.json();
+    console.log(data.user);
     if (!res.ok) {
       showNotification(data.error || '新規登録に失敗しました', '#e95464');
       return;
     }
     currentUser = username;
+    currentUserIcon = selectedIcon;
     updateUserIDDisplay(currentUser);
     showScreen('theme-screen');
     showNotification('新規登録が完了しました');
@@ -103,6 +168,7 @@ async function handleLogin() {
       return;
     }
     currentUser = data.user?.username || username;
+    currentUserIcon = data.user?.icon || "icon1";
     updateUserIDDisplay(currentUser);
     showScreen('theme-screen');
     showNotification('ログインしました');
@@ -112,10 +178,16 @@ async function handleLogin() {
 }
 
 function logout() {
+
   currentUser = null;
   currentDebateId = null;
-  showScreen('login-screen');
+
+  // アイコン状態も初期化
+  currentUserIcon = "icon1";
+
   updateUserIDDisplay(null);
+
+  showScreen('login-screen');
 }
 
 function updateTurnDisplay() {
@@ -207,6 +279,13 @@ async function startGame(stance) {
 
   showScreen('gameScreen');
 
+  // ユーザーキャラ画像変更
+  const userImg = document.getElementById('userImg');
+
+  if (userImg && iconData[currentUserIcon]) {
+    userImg.src = iconData[currentUserIcon].character;
+  }
+
   if (!currentUser) {
     addMessage('ai', '先にログインしてください。');
     return;
@@ -297,9 +376,15 @@ async function showResult() {
   showScreen('resultScreen');
   const scoreText = document.getElementById('scoreText');
   const commentText = document.getElementById('commentText');
+  const outcomeE1 = document.getElementById('resultOutcome');
+
   if (scoreText) scoreText.innerText = '--点';
   if (commentText) commentText.innerText = '結果取得中...';
-
+  if (outcomeE1) {
+    outcomeE1.innerText = '';
+    outcomeE1.className = 'result-outcome';
+  }
+  
   if (!currentDebateId) {
     if (commentText) commentText.innerText = '討論セッションが見つかりません。';
     return;
@@ -316,7 +401,34 @@ async function showResult() {
       return;
     }
 
-    if (scoreText) scoreText.innerText = `${data.debate?.score ?? 0}点`;
+    if (scoreText) {
+      const score = data.debate?.score ?? 0;
+      scoreText.innerText = `${score}点`;
+
+      // ★ 勝敗表示
+      const outcomeEl = document.getElementById('resultOutcome');
+
+      if (outcomeEl) {
+
+        // 初期化
+        outcomeEl.className = 'result-outcome';
+
+        if (score <= 49) {
+          outcomeEl.innerText = '敗北...';
+          outcomeEl.classList.add('result-lose');
+        } else if (score === 50) {
+          outcomeEl.innerText = '引き分け';
+          outcomeEl.classList.add('result-draw');
+        } else {
+          outcomeEl.innerText = '勝利！';
+          outcomeEl.classList.add('result-win');
+        }
+
+      } else {
+        console.log("resultOutcomeが見つからない");
+      }
+    }
+
     if (commentText) commentText.innerText = data.debate?.summary || '講評はありません。';
     currentDebateId = null;
   } catch {
@@ -343,6 +455,50 @@ async function showHistory() {
     }
 
     const debates = Array.isArray(data.debates) ? data.debates : [];
+
+    /* =========================
+      プロフィール表示更新
+    ========================= */
+
+    // ユーザー名
+    document.getElementById('mypageUserId').innerText =
+      currentUser + "さん";
+
+    // アイコン
+    if (iconData[currentUserIcon]) {
+
+      document.getElementById('mypageIcon').src =
+        iconData[currentUserIcon].menu;
+    }
+
+    function changeUserName() {
+
+      const newName = prompt("新しいIDを入力してください");
+      if (!newName) return;
+      currentUser = newName;
+      updateUserIDDisplay(currentUser);
+      document.getElementById('mypageUserId').innerText =
+        currentUser;
+      showNotification("IDを変更しました");
+    }
+
+    function changeUserIcon() {
+      const icons = ["icon1", "icon2", "icon3", "icon4", "icon5"];
+      let currentIndex = icons.indexOf(currentUserIcon);
+      currentIndex++;
+      if (currentIndex >= icons.length) {
+        currentIndex = 0;
+      }
+
+      currentUserIcon = icons[currentIndex];
+      // 右上更新
+      updateUserIDDisplay(currentUser);
+      // マイページ更新
+      document.getElementById('mypageIcon').src =
+        iconData[currentUserIcon].menu;
+      showNotification("アイコンを変更しました");
+    }
+
     if (debates.length === 0) {
       list.innerHTML = "<p style='text-align:center;'>履歴はまだありません</p>";
       showScreen('history-screen');
@@ -489,3 +645,101 @@ window.onclick = function (event) {
     if (menu) menu.style.display = 'none';
   }
 };
+
+function selectIcon(element) {
+
+  // 選択状態を全部解除
+  document.querySelectorAll('.selectable-icon').forEach((icon) => {
+    icon.classList.remove('selected');
+  });
+
+  // 押したものを選択状態に
+  element.classList.add('selected');
+
+  // data-icon を保存
+  selectedIcon = element.dataset.icon;
+}
+
+async function updatePlayerStats(username) {
+    try {
+        const response = await fetch(`/api/user/stats/${username}`);
+        const data = await response.json();
+
+        // HTMLの要素（画像3枚目の右側パネル）を書き換える
+        // 推定MBTIの表示場所 (例: id="estimatedMbti")
+        const mbtiElement = document.getElementById('estimatedMbti');
+        if (mbtiElement) {
+            mbtiElement.innerText = data.estimatedMbti;
+            mbtiElement.style.color = "#ff4d6d"; // 強調色
+        }
+
+        // 平均スコアの表示場所 (例: id="averageScore")
+        const scoreElement = document.getElementById('averageScore');
+        if (scoreElement) {
+            scoreElement.innerText = `${data.avgScore} 点`;
+        }
+    } catch (error) {
+        console.error("ステータスの更新に失敗しました", error);
+    }
+}
+
+// 履歴画面を表示する関数の中で呼び出す
+async function loadDashboard(username) {
+    try {
+        const response = await fetch(`/api/user/stats/${username}`);
+        const data = await response.json();
+
+        // 取得したデータを画面に反映
+        document.getElementById('estimatedMbti').innerText = data.estimatedMbti;
+        document.getElementById('averageScore').innerText = `${data.avgScore} 点`;
+        
+        // その後、既存の履歴一覧（画像3枚目の左側）をロードする処理を続ける...
+    } catch (error) {
+        console.error("統計データのロード失敗:", error);
+    }
+}
+
+async function refreshStats() {
+    // ローカルストレージなどからログイン中のユーザー名を取得
+    const username = localStorage.getItem('username'); 
+    if (!username) return;
+
+    try {
+        const response = await fetch(`/api/user/stats/${username}`);
+        const data = await response.json();
+
+        // HTML側のID「mypageMbti」を書き換える
+        const mbtiElem = document.getElementById('mypageMbti');
+        if (mbtiElem) mbtiElem.innerText = data.estimatedMbti;
+
+        // HTML側のID「mypageAverage」を書き換える
+        const avgElem = document.getElementById('mypageAverage');
+        if (avgElem) avgElem.innerText = data.avgScore;
+        
+        console.log("統計データを更新しました:", data);
+    } catch (error) {
+        console.error("統計データの反映に失敗しました:", error);
+    }
+}
+
+// サーバーから取得したデータをHTMLに反映させる処理
+async function updateMyPageStats(username) {
+  try {
+    const response = await fetch(`/api/user/stats/${username}`);
+    const data = await response.json();
+
+    // HTMLの id="mypageMbti" に値をセット
+    const mbtiElement = document.getElementById('mypageMbti');
+    if (mbtiElement) {
+      mbtiElement.innerText = data.estimatedMbti; 
+    }
+
+    // HTMLの id="mypageAverage" に値をセット
+    const avgElement = document.getElementById('mypageAverage');
+    if (avgElement) {
+      avgElement.innerText = data.avgScore;
+    }
+  } catch (error) {
+    console.error("マイページ統計の取得に失敗しました:", error);
+  }
+}

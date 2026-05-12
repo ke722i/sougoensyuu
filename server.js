@@ -40,7 +40,8 @@ async function initDB() {
       CREATE TABLE "user_table" (
         "user_ID" SERIAL PRIMARY KEY,
         "name" VARCHAR(50) UNIQUE NOT NULL,
-        "password" VARCHAR(255) NOT NULL
+        "password" VARCHAR(255) NOT NULL,
+        "icon" VARCHAR(50) DEFAULT 'icon1'
       );
     `
   );
@@ -150,30 +151,35 @@ async function initDB() {
 }
 
 function parseEvaluation(text) {
-  const logicMatch = text.match(/LOGIC_SCORE:\s*(\d{1,3})/i);
-  const evidenceMatch = text.match(/EVIDENCE_SCORE:\s*(\d{1,3})/i);
-  const rebuttalMatch = text.match(/REBUTTAL_SCORE:\s*(\d{1,3})/i);
-  const consistencyMatch = text.match(/CONSISTENCY_SCORE:\s*(\d{1,3})/i);
-  const persuasionMatch = text.match(/PERSUASION_SCORE:\s*(\d{1,3})/i);
-  const expressionMatch = text.match(/EXPRESSION_SCORE:\s*(\d{1,3})/i);
-  const scoreMatch = text.match(/FINAL_SCORE:\s*(\d{1,3})/i);
-  const mbtiMatch = text.match(/MBTI:\s*([A-Z]{4})/i);
+  // ヘルパー関数: 日本語名または英語名で数値を検索する
+  const extract = (keys, max) => {
+    // 例: (論理性|LOGIC_SCORE).*?(\d+) という正規表現を作る
+    const pattern = `(?:${keys.join('|')}).*?(\\d+)`;
+    const reg = new RegExp(pattern, 'i');
+    const match = text.match(reg);
+    
+    // 数値が見つかればそれを返し、なければ最低限の点数(4割)を返す
+    const val = match ? Number(match[1]) : Math.floor(max * 0.4);
+    return Math.max(0, Math.min(max, val));
+  };
 
-  const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
-  const logicScore = clamp(Number(logicMatch?.[1] ?? 0) || 0, 0, 30);
-  const evidenceScore = clamp(Number(evidenceMatch?.[1] ?? 0) || 0, 0, 20);
-  const rebuttalScore = clamp(Number(rebuttalMatch?.[1] ?? 0) || 0, 0, 20);
-  const consistencyScore = clamp(Number(consistencyMatch?.[1] ?? 0) || 0, 0, 10);
-  const persuasionScore = clamp(Number(persuasionMatch?.[1] ?? 0) || 0, 0, 10);
-  const expressionScore = clamp(Number(expressionMatch?.[1] ?? 0) || 0, 0, 10);
+  // 各項目を抽出 (日本語・英語どちらにも対応)
+  const logicScore = extract(['論理性', '論理', 'LOGIC_SCORE', 'LOGIC'], 30);
+  const evidenceScore = extract(['根拠', 'EVIDENCE_SCORE', 'EVIDENCE'], 20);
+  const rebuttalScore = extract(['反論力', '反論', 'REBUTTAL_SCORE', 'REBUTTAL'], 20);
+  const consistencyScore = extract(['一貫性', 'CONSISTENCY_SCORE', 'CONSISTENCY'], 10);
+  const persuasionScore = extract(['説得力', 'PERSUASION_SCORE', 'PERSUASION'], 10);
+  const expressionScore = extract(['表現力', '表現', 'EXPRESSION_SCORE', 'EXPRESSION'], 10);
 
-  let score = scoreMatch ? Number(scoreMatch[1]) : NaN;
-  if (Number.isNaN(score)) {
-    score = logicScore + evidenceScore + rebuttalScore + consistencyScore + persuasionScore + expressionScore;
-  }
+  // 合計点の抽出 (なければ加算)
+  const scoreMatch = text.match(/(?:合計点|FINAL_SCORE).*?(\d+)/i);
+  let score = scoreMatch ? Number(scoreMatch[1]) : (logicScore + evidenceScore + rebuttalScore + consistencyScore + persuasionScore + expressionScore);
   score = Math.max(0, Math.min(100, score));
 
-  const mbti = mbtiMatch ? mbtiMatch[1].toUpperCase() : 'INTP';
+  // MBTIの抽出 (英語4文字を優先的に探す)
+  const mbtiMatch = text.match(/[I|E][N|S][T|F][J|P]/i);
+  const mbti = mbtiMatch ? mbtiMatch[0].toUpperCase() : 'INTP';
+
   return {
     score,
     mbti,
@@ -189,29 +195,41 @@ function parseEvaluation(text) {
 async function callGemini(prompt) {
   if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set');
 
-  // レートリミット: 無料枠対策で3秒待機
-  await new Promise(resolve => setTimeout(resolve, 3000));
-
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.8, maxOutputTokens: 1024 },
+      generationConfig: { 
+        temperature: 0.9, 
+        maxOutputTokens: 2048, // 1024から引き上げ
+        topP: 0.95 
+      },
+      // セーフティ設定を追加（議論が止まらないようにする）
+      safetySettings: [
+        { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+        { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+      ]
     }),
   });
 
   const data = await response.json();
-  if (!response.ok || data.error) {
-    throw new Error(data?.error?.message || `Gemini API error (${response.status})`);
+  
+  // デバッグ用：もし止まったらターミナルに理由を表示
+  if (data.candidates?.[0]?.finishReason === "SAFETY") {
+    console.error("AIが安全性の判断により回答を中断しました。");
+    return "（議論が白熱しすぎたため、回答が制限されました。別の視点で話しましょう。）";
   }
 
+  if (!response.ok || data.error) throw new Error(data?.error?.message || 'Gemini API Error');
   return data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
 app.post('/api/register', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, icon } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'username and password are required' });
 
   try {
@@ -220,8 +238,8 @@ app.post('/api/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      'INSERT INTO "user_table" ("name", "password") VALUES ($1, $2) RETURNING "user_ID", "name"',
-      [username, passwordHash]
+      'INSERT INTO "user_table" ("name", "password", "icon") VALUES ($1, $2, $3) RETURNING "user_ID", "name"',
+      [username, passwordHash, icon || 'icon1']
     );
     return res.json({ user: result.rows[0] });
   } catch (error) {
@@ -235,14 +253,14 @@ app.post('/api/login', async (req, res) => {
   if (!username || !password) return res.status(400).json({ error: 'username and password are required' });
 
   try {
-    const result = await pool.query('SELECT "user_ID", "name", "password" FROM "user_table" WHERE "name" = $1', [username]);
+    const result = await pool.query('SELECT "user_ID", "name", "password", "icon" FROM "user_table" WHERE "name" = $1', [username]);
     if (result.rowCount === 0) return res.status(401).json({ error: 'invalid credentials' });
 
     const user = result.rows[0];
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ error: 'invalid credentials' });
 
-    return res.json({ user: { id: user.user_ID, username: user.name } });
+    return res.json({ user: { id: user.user_ID, username: user.name, icon: user.icon } });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'failed to login' });
@@ -292,35 +310,18 @@ app.post('/api/debate/message', async (req, res) => {
     const theme = debateResult.rows[0].theme;
     const stance = theme.split(' / ')[1] || '';
 
-    const prompt = `あなたは厳格なAIディベーター兼採点官です。
-テーマ: ${theme} / 立場: ${stance}
+    const prompt = `あなたは論理学に精通した鋭いAIディベーターです。
+テーマ: ${theme} / あなたの立場: ${stance}
 
-【フェーズ判断】
-ユーザーの発言が終了・結果を求めるものであれば「採点」、それ以外は「議論」を行ってください。
+【指示】
+1. ユーザーの最新発言に含まれる矛盾や論理の弱点を突いてください。
+2. 150文字以内で、簡潔かつ攻撃的に反論してください。
+3. 学術的な議論なので、セーフティフィルターに触れないよう、言葉を選びつつも厳しい議論を行ってください。
 
-■議論フェーズ：
-100文字以内で、ユーザーの矛盾を突く鋭い反論を1つ返してください。
-
-■採点フェーズ：
-ユーザーのこれまでの発言（たとえ短くても）から、その意図や思考の傾向を汲み取り、以下の【配点基準】で採点してください。
-※「議論がない」と決めつけず、参加姿勢や言葉選びからベーススコア（最低点）を保証してください。
-
-余計な挨拶や長文解説を排除し、簡潔に箇条書きで出力してください。
-
-・論理性(30)：[点] [15文字以内のポジティブな解説]
-・根拠(20)：[点] [15文字以内のポジティブな解説]
-・反論力(20)：[点] [15文字以内のポジティブな解説]
-・一貫性(10)：[点] [15文字以内のポジティブな解説]
-・説得力(10)：[点] [15文字以内のポジティブな解説]
-・表現力(10)：[点] [15文字以内のポジティブな解説]
-
-【MBTI：[4文字]】[そのタイプの魅力的な特徴を15文字以内]
-
-最後に必ずこの形式で締めること：
-【合計点：[数値]点】
-
+【会話履歴】
 ${historyText}
-ユーザー最新発言: ${message}`;
+
+ユーザーの最新発言: ${message}`;
 
     let aiReply;
     try {
@@ -356,42 +357,55 @@ app.post('/api/debate/end', async (req, res) => {
     const logs = await pool.query('SELECT "chat_log" FROM "chat_log_table" WHERE "discussion_ID" = $1 ORDER BY "chat_id" ASC', [debateId]);
     const historyText = logs.rows.map((r) => r.chat_log).join('\n');
 
-    const evalPrompt = [
-      'あなたは討論評価AIです。',
-      `テーマ: ${debate.theme}`,
-      '会話ログを読み、ユーザーの討論を評価してください。',
-      '必ず次のフォーマットで返してください。',
-      'LOGIC_SCORE: 0-30の整数',
-      'EVIDENCE_SCORE: 0-20の整数',
-      'REBUTTAL_SCORE: 0-20の整数',
-      'CONSISTENCY_SCORE: 0-10の整数',
-      'PERSUASION_SCORE: 0-10の整数',
-      'EXPRESSION_SCORE: 0-10の整数',
-      'FINAL_SCORE: 0-100の整数',
-      'MBTI: 4文字（例: INTP）',
-      'COMMENT: 日本語で3-5文の講評',
-      '',
-      historyText,
-    ].join('\n');
+    // 評価プロンプトの作成
+    // app.post('/api/debate/end', ...) 内の evalPrompt を修正
+    const evalPrompt = `
+    討論評価AIとして、以下の会話ログから「数値」および「MBTI」を判定してください。
+    解説や講評などの文章は一切不要です。以下のフォーマットを厳守してください。
+
+    【MBTI判定ガイドライン】
+    - 外向(E)/内向(I): 発言の積極性、エネルギーの方向
+    - 感覚(S)/直観(N): 具体的な事実重視か、概念・可能性重視か
+    - 思考(T)/感情(F): 論理・客観性重視か、価値観・調和重視か
+    - 判断(J)/知覚(P): 結論を急ぐか、柔軟に情報を広げるか
+    これらをログから分析し、最も適合するタイプを導き出してください。
+
+    【出力フォーマット】
+    論理性: (0-30)
+    根拠: (0-20)
+    反論力: (0-20)
+    一貫性: (0-10)
+    説得力: (0-10)
+    表現力: (0-10)
+    MBTI: (4文字)
+
+    【会話ログ】
+    ${historyText}
+    `;
 
     let evaluationText;
     try {
+      // AIを呼び出す
       evaluationText = await callGemini(evalPrompt);
+      console.log("AI Evaluation Response:", evaluationText); // 通信成功時の内容を確認
     } catch (geminiError) {
-      console.error('Gemini evaluation error:', geminiError.message);
+      // エラーが発生した場合、ターミナルに詳細を表示させる
+      console.error('--- Gemini API 呼び出し失敗 ---');
+      console.error('エラー内容:', geminiError.message);
+      
+      // 失敗した場合のみ予備データ。ただし、毎回これが出るなら上のエラーログを確認。
       evaluationText = [
-        'LOGIC_SCORE: 21',
-        'EVIDENCE_SCORE: 14',
-        'REBUTTAL_SCORE: 14',
-        'CONSISTENCY_SCORE: 7',
-        'PERSUASION_SCORE: 7',
-        'EXPRESSION_SCORE: 7',
-        'FINAL_SCORE: 70',
-        'MBTI: INTP',
-        'COMMENT: 論点提示は明確でした。'
+        '論理性: 21',
+        '根拠: 14',
+        '反論力: 14',
+        '一貫性: 7',
+        '説得力: 7',
+        '表現力: 7',
+        'MBTI: INTP'
       ].join('\n');
     }
 
+    // 数値を抽出（正規表現を強化）
     const {
       score,
       mbti,
@@ -403,6 +417,7 @@ app.post('/api/debate/end', async (req, res) => {
       expressionScore
     } = parseEvaluation(evaluationText);
 
+    // DB更新処理
     await pool.query(
       'UPDATE "log_table" SET "sum_score" = $2, "mbti" = $3, "game_result" = $4 WHERE "discussions_ID" = $1',
       [debateId, score, mbti, 'completed']
@@ -412,6 +427,7 @@ app.post('/api/debate/end', async (req, res) => {
       'DELETE FROM "log_score_table" WHERE "discussions_ID" = $1 AND "user_ID" = $2',
       [debateId, debate.user_ID]
     );
+
     await pool.query(
       `INSERT INTO "log_score_table" (
         "discussions_ID", "user_ID", "logic_score", "evidence_score", "rebuttal_score", "consistency_score", "persuasion_score", "expression_score", "sum_score"
@@ -421,7 +437,7 @@ app.post('/api/debate/end', async (req, res) => {
 
     return res.json({ debate: { id: Number(debateId), score, mbti, summary: evaluationText } });
   } catch (error) {
-    console.error(error);
+    console.error("サーバー内エラー:", error);
     return res.status(500).json({ error: 'failed to end debate' });
   }
 });
@@ -534,6 +550,34 @@ app.get('/api/ranking', async (req, res) => {
 
 app.get('/api/ranking/debug', (_req, res) => {
   res.json({ ok: true, route: '/api/ranking' });
+});
+
+app.get('/api/user/stats/:username', async (req, res) => {
+  const { username } = req.params;
+  try {
+    // ユーザーIDの取得
+    const userResult = await pool.query('SELECT "user_ID" FROM "user_table" WHERE "name" = $1', [username]);
+    if (userResult.rowCount === 0) return res.status(404).json({ error: 'User not found' });
+    const userId = userResult.rows[0].user_ID;
+
+    // 平均スコアと頻出MBTI（推定MBTI）を取得
+    const statsResult = await pool.query(`
+      SELECT 
+        ROUND(AVG(sum_score)) as avg_score,
+        MODE() WITHIN GROUP (ORDER BY mbti) as estimated_mbti
+      FROM log_table 
+      WHERE "user_ID" = $1 AND game_result = 'completed' AND mbti != 'UNKN'
+    `, [userId]);
+
+    const stats = statsResult.rows[0];
+    res.json({
+      avgScore: stats.avg_score || 0,
+      estimatedMbti: stats.estimated_mbti || '---'
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: 'Failed to fetch stats' });
+  }
 });
 
 initDB()
