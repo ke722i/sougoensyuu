@@ -40,7 +40,8 @@ async function initDB() {
       CREATE TABLE "user_table" (
         "user_ID" SERIAL PRIMARY KEY,
         "name" VARCHAR(50) UNIQUE NOT NULL,
-        "password" VARCHAR(255) NOT NULL
+        "password" VARCHAR(255) NOT NULL,
+        "icon" VARCHAR(50) DEFAULT 'icon1'
       );
     `
   );
@@ -211,7 +212,7 @@ async function callGemini(prompt) {
 }
 
 app.post('/api/register', async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, icon } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'username and password are required' });
 
   try {
@@ -220,8 +221,8 @@ app.post('/api/register', async (req, res) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     const result = await pool.query(
-      'INSERT INTO "user_table" ("name", "password") VALUES ($1, $2) RETURNING "user_ID", "name"',
-      [username, passwordHash]
+      'INSERT INTO "user_table" ("name", "password", "icon") VALUES ($1, $2, $3) RETURNING "user_ID", "name"',
+      [username, passwordHash, icon || 'icon1']
     );
     return res.json({ user: result.rows[0] });
   } catch (error) {
@@ -235,14 +236,14 @@ app.post('/api/login', async (req, res) => {
   if (!username || !password) return res.status(400).json({ error: 'username and password are required' });
 
   try {
-    const result = await pool.query('SELECT "user_ID", "name", "password" FROM "user_table" WHERE "name" = $1', [username]);
+    const result = await pool.query('SELECT "user_ID", "name", "password", "icon" FROM "user_table" WHERE "name" = $1', [username]);
     if (result.rowCount === 0) return res.status(401).json({ error: 'invalid credentials' });
 
     const user = result.rows[0];
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) return res.status(401).json({ error: 'invalid credentials' });
 
-    return res.json({ user: { id: user.user_ID, username: user.name } });
+    return res.json({ user: { id: user.user_ID, username: user.name, icon: user.icon } });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'failed to login' });
@@ -535,6 +536,68 @@ app.get('/api/ranking', async (req, res) => {
 app.get('/api/ranking/debug', (_req, res) => {
   res.json({ ok: true, route: '/api/ranking' });
 });
+
+// ユーザー名変更
+  app.put('/api/user/change-name', async (req, res) => {
+    const { currentUsername, newUsername } = req.body;
+
+    if (!currentUsername || !newUsername) {
+      return res.status(400).json({ error: 'username is required' });
+    }
+
+    try {
+      // 重複確認
+      const exists = await pool.query(
+        'SELECT 1 FROM "user_table" WHERE "name" = $1',
+        [newUsername]
+      );
+
+      if (exists.rowCount > 0) {
+        return res.status(409).json({ error: 'username already exists' });
+      }
+
+      // 更新
+      await pool.query(
+        'UPDATE "user_table" SET "name" = $1 WHERE "name" = $2',
+        [newUsername, currentUsername]
+      );
+
+      return res.json({
+        success: true,
+        username: newUsername
+      });
+
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'failed to change username' });
+    }
+  });
+
+
+  // アイコン変更
+  app.put('/api/user/change-icon', async (req, res) => {
+    const { username, icon } = req.body;
+
+    if (!username || !icon) {
+      return res.status(400).json({ error: 'username and icon are required' });
+    }
+
+    try {
+      await pool.query(
+        'UPDATE "user_table" SET "icon" = $1 WHERE "name" = $2',
+        [icon, username]
+      );
+
+      return res.json({
+        success: true,
+        icon
+      });
+
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ error: 'failed to change icon' });
+    }
+  });
 
 initDB()
   .then(() => {

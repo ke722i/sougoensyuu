@@ -8,182 +8,215 @@
 </head>
 <body>
 
-<div class="top-nav-container">
-  <!-- 1. ランキングボタン（左側） -->
-  <button id="ranking-btn" class="ranking-nav-btn" onclick="showScreen('ranking-screen')">
-    <span class="trophy-icon">🏆</span> ランキング
-  </button>
-  <!-- 2. ユーザーバッジ（右側） -->
-  <div id="user-display" class="user-id-badge" style="display:none;" onclick="toggleUserMenu()">
-    <img src="icon_png/01_hiyoko.png" class="user-icon">
-    <div id="user-menu" class="user-menu">
-      <p id="menu-user-id" style="font-weight: bold; border-bottom: 1px solid #555; padding-bottom: 8px; margin-bottom: 12px;"></p>
-      <button class="history-btn" onclick="showHistory(); toggleUserMenu(); event.stopPropagation();">議論履歴を見る</button>
-      <button class="logout-btn" onclick="logout(); toggleUserMenu(); event.stopPropagation();">ログアウト</button>
-    </div>
-  </div>
-</div>
+  <!-- ==========================================
+    1. 上部ナビゲーション 
+  =========================================== -->
+  <div class="top-nav-container">
+    <!-- ランキングボタン -->
+    <button id="ranking-btn" class="ranking-nav-btn" onclick="showRanking()">
+      <span class="trophy-icon">🏆</span> ランキング
+    </button>
 
-<div class="game-wrapper">
-  <!-- 通知バナー（最前面） -->
-  <div id="notification-banner" class="notification-banner"></div>
-
-  <!-- 1. ランキング画面 -->
-  <div id="ranking-screen" class="screen">
-    <div class="auth-card" style="max-width: 600px; height: 80vh; display: flex; flex-direction: column;">
-      <h2 class="main-title" style="font-size: 2rem;">🏆 ランキング</h2>
-    
-      <!-- 期間選択プルダウン -->
-      <div style="margin-bottom: 15px; text-align: center;">
-        <select id="rankingPeriod" class="auth-input" style="width: 200px; padding: 8px;" onchange="updateRankingList()">
-          <option value="today">今週のランキング</option>
-          <option value="week">今月のランキング</option>
-          <option value="month">今年のランキング</option>
-        </select>
-      </div>
-
-      <!-- ランキング表示エリア -->
-      <div id="rankingList" class="history-container" style="flex-grow: 1; overflow-y: auto;">
-        <!-- JSで動的に挿入されます -->
-      </div>
-
-      <button class="back-link" onclick="showScreen('theme-screen')">テーマ選択に戻る</button>
-    </div>
-  </div>
-
-  <!-- 2. 新規登録画面 -->
-  <div id="signup-screen" class="screen">
-    <div class="auth-card">
-      <div class="auth-logo">
-        <img src="path_to_your_logo.png" alt="LOGO">
-      </div>
-      <h1 class="main-title">新規登録</h1>
-      <div class="auth-form">
-        <input type="text" id="signupId" placeholder="新しいユーザーID" class="auth-input">
-        <input type="password" id="signupPw" placeholder="パスワード" class="auth-input">
-        <button class="start-btn" onclick="handleSignup()">登録する</button>
-      </div>
-      <button class="back-link" onclick="showScreen('login-screen')">ログインに戻る</button>
-    </div>
-  </div>
-
-  <!-- 3. ログイン画面 -->
-  <div id="login-screen" class="screen active">
-    <div class="auth-card">
-      <div class="auth-logo">
-        <img src="path_to_your_logo.png" alt="LOGO">
-      </div>
-      <h1 class="main-title">AIディベートバトル</h1>
-      <p>論理の力でAIを圧倒せよ</p>
-      <div class="auth-form">
-        <input type="text" id="loginId" placeholder="ユーザーID" class="auth-input">
-        <input type="password" id="loginPw" placeholder="パスワード" class="auth-input">
-        <button class="start-btn" onclick="handleLogin()">ログイン</button>
-      </div>
-      <button class="back-link" onclick="showScreen('signup-screen')">新規登録はこちら</button>
-    </div>
-  </div>
-
-  <!-- 4. テーマ選択画面 -->
-  <div id="theme-screen" class="screen">
-    <h2 class="screen-title">テーマを選んでください</h2>
-    <div class="theme-grid">
-      <div class="category ai">
-        <p class="cat-label">AI・テクノロジー</p>
-        <button onclick="showStance('ai1')">AIは人間の知能を超える？</button>
-        <button onclick="showStance('ai2')">AIと人間、どちらが信頼できる？</button>
-        <button onclick="showStance('ai3')">AIで人間は幸せになる？</button>
-      </div>
-      <div class="category life">
-        <p class="cat-label">人生・価値観</p>
-        <button onclick="showStance('life1')">安定した人生を選ぶべき？</button>
-        <button onclick="showStance('life2')">お金は人生で最も重要？</button>
-        <button onclick="showStance('life3')">努力と才能、どちらが重要？</button>
-      </div>
-      <div class="category human">
-        <p class="cat-label">人間関係</p>
-        <button onclick="showStance('human1')">正直であることは常に正しい？</button>
-        <button onclick="showStance('human2')">他人を完全に理解できるか？</button>
-        <button onclick="showStance('human3')">恋愛と友情、大事なのは？</button>
-      </div>
-      <div class="category custom">
-        <p class="cat-label">自由入力</p>
-        <input type="text" id="customThemeInput" placeholder="例：キノコとタケノコ..." class="auth-input">
-        <button onclick="startCustomTheme()" class="custom-start-btn">議論開始</button>
+    <!-- ユーザーバッジ & メニュー -->
+    <div id="user-display" class="user-id-badge" style="display:none;" onclick="toggleUserMenu()">
+      <img id="headerUserIcon" src="" class="user-icon">
+      <div id="user-menu" class="user-menu">
+        <p id="menu-user-id" class="menu-header"></p>
+        <button class="history-btn" onclick="showHistory(); toggleUserMenu(); event.stopPropagation();">マイページ</button>
+        <button class="logout-btn" onclick="logout(); toggleUserMenu(); event.stopPropagation();">ログアウト</button>
       </div>
     </div>
   </div>
 
-  <!-- 5. 議論履歴画面 -->
-  <div id="history-screen" class="screen">
-    <div class="auth-card" style="max-width: 600px; height: 75vh; display: flex; flex-direction: column;">
-      <h2 class="main-title">議論履歴</h2>
-      <div id="historyList" class="history-container"></div>
-      <button class="back-link" onclick="showScreen('theme-screen')">テーマ選択に戻る</button>
-    </div>
-  </div>
+  <div class="game-wrapper">
+    <!-- 通知バナー（最前面） -->
+    <div id="notification-banner" class="notification-banner"></div>
 
-  <!-- 6. 立場選択画面 -->
-  <div id="stanceScreen" class="screen">
-    <div class="stance-card">
-      <h2 id="themeTitle">テーマタイトル</h2>
-      <p>あなたの立場を選択してください</p>
-      <div id="stanceButtons" class="stance-group"></div>
-      <button class="back-link" onclick="showScreen('theme-screen')">テーマ選び直す</button>
-    </div>
-  </div>
+    <!-- ==========================================
+      2. 各画面（スクリーン） 
+    =========================================== -->
 
-  <!-- 7. ゲーム本編画面 -->
-  <div id="gameScreen" class="screen stage">
-    <div class="char-container">
-      <div class="char-box left"><img src="icon_png/11_AI.png" alt="AI" class="char-img" id="aiImg"></div>
-      <div class="char-box right"><img src="icon_png/02_hiyoko.png" alt="自分" class="char-img" id="userImg"></div>
-    </div>
-    <div class="status-bar">
-      <div id="themeText" class="theme-display"></div>
-      <div id="turnText" class="turn-display"></div>
-    </div>
-    <div id="chat" class="novel-log"></div>
-    <div class="novel-footer">
-      <div class="message-window">
-        <textarea id="userInput" placeholder="メッセージを入力..." rows="2"></textarea>
-        <button id="sendBtn" onclick="sendMessage()">送信</button>
-      </div>
-      <div class="footer-btns">
-        <button class="ctrl-btn btn-result" onclick="handleResultButton()">中断して結果を確認する</button>
-        <button class="ctrl-btn btn-back" onclick="backToTitle()">中断してテーマ選択画面に戻る</button>
+    <!-- ランキング画面 -->
+    <div id="ranking-screen" class="screen">
+      <div class="auth-card ranking-card">
+        <h2 class="main-title">🏆 ランキング</h2>
+        <div class="filter-area">
+          <select id="rankingPeriod" class="auth-input" onchange="updateRankingList()">
+            <option value="today">今週のランキング</option>
+            <option value="week">今月のランキング</option>
+            <option value="month">今年のランキング</option>
+          </select>
+        </div>
+        <div id="rankingList" class="history-container scrollable">
+          <!-- JSで動的に挿入 -->
+        </div>
+        <button class="back-link" onclick="showScreen('theme-screen')">テーマ選択に戻る</button>
       </div>
     </div>
-  </div>
 
-  <!-- 8. 結果表示画面 -->
-  <div id="resultScreen" class="screen">
-    <div class="result-card">
-      <div class="result-header">DEBATE COMPLETE</div>
-      <div class="result-body">
-        <p class="result-label">論理スコア</p>
-        <div id="scoreText" class="score"></div>
-        <div class="divider"></div>
-        <div id="commentText" class="comment"></div>
+    <!-- 新規登録画面 -->
+    <div id="signup-screen" class="screen">
+      <div class="auth-card">
+        <div class="auth-logo">
+          <img src="path_to_your_logo.png" alt="LOGO">
+        </div>
+        <h1 class="main-title">新規登録</h1>
+        <div class="auth-form">
+          <div class="icon-select-area">
+            <p class="icon-select-title">アイコンを選択</p>
+            <div class="icon-grid">
+              <img src="icon_png/01_hiyoko.png" class="signup-icon selectable-icon selected" data-icon="icon1" onclick="selectIcon(this)">
+              <img src="icon_png/03_risu.png"   class="signup-icon selectable-icon" data-icon="icon2" onclick="selectIcon(this)">
+              <img src="icon_png/05_pengin.png" class="signup-icon selectable-icon" data-icon="icon3" onclick="selectIcon(this)">
+              <img src="icon_png/07_gorira.png" class="signup-icon selectable-icon" data-icon="icon4" onclick="selectIcon(this)">
+              <img src="icon_png/09_ma-motto.png" class="signup-icon selectable-icon" data-icon="icon5" onclick="selectIcon(this)">
+            </div>
+          </div>
+          <input type="text" id="signupId" placeholder="新しいユーザーID" class="auth-input">
+          <input type="password" id="signupPw" placeholder="パスワード" class="auth-input">
+          <button class="start-btn" onclick="handleSignup()">登録する</button>
+        </div>
+        <button class="back-link" onclick="showScreen('login-screen')">ログインに戻る</button>
       </div>
-      <div class="result-footer">
-        <button class="start-btn" onclick="showScreen('theme-screen')">テーマ選択に戻る</button>
+    </div>
+
+    <!-- ログイン画面 -->
+    <div id="login-screen" class="screen active">
+      <div class="auth-card">
+        <div class="auth-logo">
+          <img src="Gemini_Generated_Image_1jbbpg1jbbpg1jbb-removebg-preview.png" alt="LOGO">
+        </div>
+        <p>論理の力でAIを圧倒せよ</p>
+        <div class="auth-form">
+          <input type="text" id="loginId" placeholder="ユーザーID" class="auth-input">
+          <input type="password" id="loginPw" placeholder="パスワード" class="auth-input">
+          <button class="start-btn" onclick="handleLogin()">ログイン</button>
+        </div>
+        <button class="back-link" onclick="showScreen('signup-screen')">新規登録はこちら</button>
+      </div>
+    </div>
+
+    <!-- テーマ選択画面 -->
+    <div id="theme-screen" class="screen">
+      <h2 class="screen-title">テーマを選んでください</h2>
+      <div class="theme-grid">
+        <div class="category ai">
+          <p class="cat-label">AI・テクノロジー</p>
+          <button onclick="showStance('ai1')">AIは人間の知能を超える？</button>
+          <button onclick="showStance('ai2')">AIと人間、どちらが信頼できる？</button>
+          <button onclick="showStance('ai3')">AIで人間は幸せになる？</button>
+        </div>
+        <div class="category life">
+          <p class="cat-label">人生・価値観</p>
+          <button onclick="showStance('life1')">安定した人生を選ぶべき？</button>
+          <button onclick="showStance('life2')">お金は人生で最も重要？</button>
+          <button onclick="showStance('life3')">努力と才能、どちらが重要？</button>
+        </div>
+        <div class="category human">
+          <p class="cat-label">人間関係</p>
+          <button onclick="showStance('human1')">正直であることは常に正しい？</button>
+          <button onclick="showStance('human2')">他人を完全に理解できるか？</button>
+          <button onclick="showStance('human3')">恋愛と友情、大事なのは？</button>
+        </div>
+        <div class="category custom">
+          <p class="cat-label">自由入力</p>
+          <input type="text" id="customThemeInput" placeholder="例：キノコとタケノコ..." class="auth-input">
+          <button onclick="startCustomTheme()" class="custom-start-btn">議論開始</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- マイページ（履歴）画面 -->
+    <div id="history-screen" class="screen">
+      <div class="mypage-layout">
+        <!-- 左：議論履歴 -->
+        <div class="mypage-history-card">
+          <h2 class="main-title history-main-title">議論履歴</h2>
+          <div id="historyList" class="history-container"></div>
+          <button class="back-link" onclick="showScreen('theme-screen')">テーマ選択に戻る</button>
+        </div>
+        <!-- 右：プロフィール -->
+        <div class="mypage-profile-card">
+          <img id="mypageIcon" src="icon_png/01_hiyoko.png" class="mypage-big-icon">
+          <p class="mypage-username" id="mypageUserId">user</p>
+          <div class="mypage-info-box">
+            <p class="mypage-label">推定MBTI</p>
+            <p class="mypage-value" id="mypageMbti">---</p>
+          </div>
+          <div class="mypage-info-box">
+            <p class="mypage-label">平均スコア</p>
+            <p class="mypage-value"><span id="mypageAverage">0</span> 点</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 立場選択画面 -->
+    <div id="stanceScreen" class="screen">
+      <div class="stance-card">
+        <h2 id="themeTitle">テーマタイトル</h2>
+        <p>あなたの立場を選択してください</p>
+        <div id="stanceButtons" class="stance-group"></div>
+        <button class="back-link" onclick="showScreen('theme-screen')">テーマ選び直す</button>
+      </div>
+    </div>
+
+    <!-- ゲーム本編画面 -->
+    <div id="gameScreen" class="screen stage">
+      <div class="char-container">
+        <div class="char-box left"><img src="icon_png/11_AI.png" alt="AI" class="char-img" id="aiImg"></div>
+        <div class="char-box right"><img src="icon_png/02_hiyoko.png" alt="自分" class="char-img" id="userImg"></div>
+      </div>
+      <div class="status-bar">
+        <div id="themeText" class="theme-display"></div>
+        <div id="turnText" class="turn-display"></div>
+      </div>
+      <div id="chat" class="novel-log"></div>
+      <div class="novel-footer">
+        <div class="message-window">
+          <textarea id="userInput" placeholder="メッセージを入力..." rows="2"></textarea>
+          <button id="sendBtn" onclick="sendMessage()">送信</button>
+        </div>
+        <div class="footer-btns">
+          <button class="ctrl-btn btn-result" onclick="handleResultButton()">中断して結果を確認する</button>
+          <button class="ctrl-btn btn-back" onclick="backToTitle()">中断してテーマ選択画面に戻る</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 結果表示画面 -->
+    <div id="resultScreen" class="screen">
+      <div class="result-card">
+        <div class="result-header">DEBATE COMPLETE</div>
+        <div class="result-body">
+          <p class="result-label">論理スコア</p>
+          <div id="scoreText" class="score"></div>
+          <div id="resultOutcome" class="result-outcome"></div>
+          <div class="divider"></div>
+          <div id="commentText" class="comment"></div>
+        </div>
+        <div class="result-footer">
+          <button class="start-btn" onclick="showScreen('theme-screen')">テーマ選択に戻る</button>
+        </div>
+      </div>
+    </div>
+
+  </div> <!-- / .game-wrapper -->
+
+  <!-- ==========================================
+    3. 共通モーダル & スクリプト 
+  =========================================== -->
+  <div id="customModal" class="modal-overlay">
+    <div class="modal-content">
+      <h3 id="modalTitle">議論終了</h3>
+      <p id="modalMessage"></p>
+      <div class="modal-buttons">
+        <button id="modalCancel" class="btn-secondary">チャット内容を確認する</button>
+        <button id="modalConfirm" class="btn-danger">結果を見る</button>
       </div>
     </div>
   </div>
-</div> <!-- .game-wrapper ここまで -->
 
-<div id="customModal" class="modal-overlay">
-  <div class="modal-content">
-    <h3 id="modalTitle">議論終了</h3>
-    <p id="modalMessage"></p>
-    <div class="modal-buttons">
-      <button id="modalCancel" class="btn-secondary">チャット内容を確認する</button>
-      <button id="modalConfirm" class="btn-danger">結果を見る</button>
-    </div>
-  </div>
-</div>
-
-<script src="script.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
