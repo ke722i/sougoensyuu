@@ -376,9 +376,15 @@ async function showResult() {
   showScreen('resultScreen');
   const scoreText = document.getElementById('scoreText');
   const commentText = document.getElementById('commentText');
+  const outcomeE1 = document.getElementById('resultOutcome');
+
   if (scoreText) scoreText.innerText = '--点';
   if (commentText) commentText.innerText = '結果取得中...';
-
+  if (outcomeE1) {
+    outcomeE1.innerText = '';
+    outcomeE1.className = 'result-outcome';
+  }
+  
   if (!currentDebateId) {
     if (commentText) commentText.innerText = '討論セッションが見つかりません。';
     return;
@@ -654,126 +660,86 @@ function selectIcon(element) {
   selectedIcon = element.dataset.icon;
 }
 
-async function changeUserName() {
+async function updatePlayerStats(username) {
+    try {
+        const response = await fetch(`/api/user/stats/${username}`);
+        const data = await response.json();
 
-  const newName = prompt("新しいユーザーIDを入力してください");
+        // HTMLの要素（画像3枚目の右側パネル）を書き換える
+        // 推定MBTIの表示場所 (例: id="estimatedMbti")
+        const mbtiElement = document.getElementById('estimatedMbti');
+        if (mbtiElement) {
+            mbtiElement.innerText = data.estimatedMbti;
+            mbtiElement.style.color = "#ff4d6d"; // 強調色
+        }
 
-  if (!newName) return;
-
-  try {
-
-    const res = await fetch('/api/user/change-name', {
-
-      method: 'POST',
-
-      headers: {
-        'Content-Type': 'application/json'
-      },
-
-      body: JSON.stringify({
-        oldName: currentUser,
-        newName: newName
-      })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-
-      showNotification(
-        data.error || "ID変更に失敗しました",
-        "#e95464"
-      );
-
-      return;
+        // 平均スコアの表示場所 (例: id="averageScore")
+        const scoreElement = document.getElementById('averageScore');
+        if (scoreElement) {
+            scoreElement.innerText = `${data.avgScore} 点`;
+        }
+    } catch (error) {
+        console.error("ステータスの更新に失敗しました", error);
     }
-
-    currentUser = newName;
-
-    // 右上更新
-    updateUserIDDisplay(currentUser);
-
-    // マイページ更新
-    document.getElementById('mypageUserId').innerText =
-      currentUser;
-
-    showNotification("IDを変更しました");
-
-  } catch {
-
-    showNotification(
-      "サーバー接続に失敗しました",
-      "#e95464"
-    );
-  }
 }
 
-async function changeUserIcon() {
+// 履歴画面を表示する関数の中で呼び出す
+async function loadDashboard(username) {
+    try {
+        const response = await fetch(`/api/user/stats/${username}`);
+        const data = await response.json();
 
-  const icons = [
-    "icon1",
-    "icon2",
-    "icon3",
-    "icon4",
-    "icon5"
-  ];
+        // 取得したデータを画面に反映
+        document.getElementById('estimatedMbti').innerText = data.estimatedMbti;
+        document.getElementById('averageScore').innerText = `${data.avgScore} 点`;
+        
+        // その後、既存の履歴一覧（画像3枚目の左側）をロードする処理を続ける...
+    } catch (error) {
+        console.error("統計データのロード失敗:", error);
+    }
+}
 
-  let currentIndex =
-    icons.indexOf(currentUserIcon);
+async function refreshStats() {
+    // ローカルストレージなどからログイン中のユーザー名を取得
+    const username = localStorage.getItem('username'); 
+    if (!username) return;
 
-  currentIndex++;
+    try {
+        const response = await fetch(`/api/user/stats/${username}`);
+        const data = await response.json();
 
-  if (currentIndex >= icons.length) {
+        // HTML側のID「mypageMbti」を書き換える
+        const mbtiElem = document.getElementById('mypageMbti');
+        if (mbtiElem) mbtiElem.innerText = data.estimatedMbti;
 
-    currentIndex = 0;
-  }
+        // HTML側のID「mypageAverage」を書き換える
+        const avgElem = document.getElementById('mypageAverage');
+        if (avgElem) avgElem.innerText = data.avgScore;
+        
+        console.log("統計データを更新しました:", data);
+    } catch (error) {
+        console.error("統計データの反映に失敗しました:", error);
+    }
+}
 
-  const newIcon = icons[currentIndex];
-
+// サーバーから取得したデータをHTMLに反映させる処理
+async function updateMyPageStats(username) {
   try {
+    const response = await fetch(`/api/user/stats/${username}`);
+    const data = await response.json();
 
-    const res = await fetch('/api/user/change-icon', {
-
-      method: 'POST',
-
-      headers: {
-        'Content-Type': 'application/json'
-      },
-
-      body: JSON.stringify({
-        username: currentUser,
-        icon: newIcon
-      })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-
-      showNotification(
-        data.error || "アイコン変更に失敗しました",
-        "#e95464"
-      );
-
-      return;
+    // HTMLの id="mypageMbti" に値をセット
+    const mbtiElement = document.getElementById('mypageMbti');
+    if (mbtiElement) {
+      mbtiElement.innerText = data.estimatedMbti; 
     }
 
-    currentUserIcon = newIcon;
-
-    // 右上更新
-    updateUserIDDisplay(currentUser);
-
-    // マイページ更新
-    document.getElementById('mypageIcon').src =
-      iconData[currentUserIcon].menu;
-
-    showNotification("アイコンを変更しました");
-
-  } catch {
-
-    showNotification(
-      "サーバー接続に失敗しました",
-      "#e95464"
-    );
+    // HTMLの id="mypageAverage" に値をセット
+    const avgElement = document.getElementById('mypageAverage');
+    if (avgElement) {
+      avgElement.innerText = data.avgScore;
+    }
+  } catch (error) {
+    console.error("マイページ統計の取得に失敗しました:", error);
   }
 }
