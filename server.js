@@ -268,22 +268,38 @@ app.post('/api/login', async (req, res) => {
 });
 
 app.post('/api/debate/start', async (req, res) => {
-  const { username, theme, stance } = req.body;
-  if (!username || !theme || !stance) return res.status(400).json({ error: 'username, theme, stance are required' });
+  const { username, theme, stance, difficulty } = req.body;
+  if (!username || !theme || !stance) return res.status(400).json({ error: 'required fields missing' });
 
   try {
     const userResult = await pool.query('SELECT "user_ID" FROM "user_table" WHERE "name" = $1', [username]);
     if (userResult.rowCount === 0) return res.status(404).json({ error: 'user not found' });
 
     const userId = userResult.rows[0].user_ID;
-    const intro = `テーマ「${theme}」で討論開始。あなたの立場は「${stance}」。最初の主張をどうぞ。`;
+
+    const selectedDifficulty = difficulty || '中';
+    const fullTheme = `${theme} / ${stance} [${selectedDifficulty}]`;
+
+    //挨拶
+    let greeting = "";
+    if (selectedDifficulty === '弱') {
+      greeting = '現在の難易度は【弱】です。';
+    } else if (selectedDifficulty === '強') {
+      greeting = '現在の難易度は【強】です。'
+    } else {
+      greeting = '現在の難易度は【中】です。'
+    }
+
+    const intro = `${greeting}\nテーマ「${theme}」について、あなたの「${stance}」という立場から最初の主張をどうぞ。`;
 
     const debate = await pool.query(
       'INSERT INTO "log_table" ("user_ID", "mbti", "theme", "sum_score", "game_result") VALUES ($1, $2, $3, 0, $4) RETURNING "discussions_ID", "date_time"',
-      [userId, 'UNKN', `${theme} / ${stance}`, 'active']
+      [userId, 'UNKN', fullTheme, 'active']
     );
 
     const discussionId = debate.rows[0].discussions_ID;
+    
+
     await pool.query('INSERT INTO "chat_log_table" ("discussion_ID", "chat_log") VALUES ($1, $2)', [discussionId, `AI: ${intro}`]);
 
     return res.json({ debate: { id: discussionId, theme, stance, started_at: debate.rows[0].date_time }, aiReply: intro });
@@ -294,35 +310,64 @@ app.post('/api/debate/start', async (req, res) => {
 });
 
 app.post('/api/debate/message', async (req, res) => {
-  const { debateId, message } = req.body;
+  const { debateId, message } = req.body; // ★ ここで body から値を取り出す必要があります
   if (!debateId || !message) return res.status(400).json({ error: 'debateId and message are required' });
 
   try {
-    const debateResult = await pool.query('SELECT "discussions_ID", "theme", "game_result" FROM "log_table" WHERE "discussions_ID" = $1', [debateId]);
+    // DBから討論情報を取得
+    const debateResult = await pool.query(
+      'SELECT "discussions_ID", "theme", "game_result" FROM "log_table" WHERE "discussions_ID" = $1',
+      [debateId]
+    );
+
     if (debateResult.rowCount === 0) return res.status(404).json({ error: 'debate not found' });
     if (debateResult.rows[0].game_result !== 'active') return res.status(400).json({ error: 'debate already ended' });
 
+    // ユーザーの発言を保存
     await pool.query('INSERT INTO "chat_log_table" ("discussion_ID", "chat_log") VALUES ($1, $2)', [debateId, `USER: ${message}`]);
 
-    const logs = await pool.query('SELECT "chat_log" FROM "chat_log_table" WHERE "discussion_ID" = $1 ORDER BY "chat_id" ASC LIMIT 30', [debateId]);
+    // 履歴の取得
+    const logs = await pool.query(
+      'SELECT "chat_log" FROM "chat_log_table" WHERE "discussion_ID" = $1 ORDER BY "chat_id" ASC LIMIT 30',
+      [debateId]
+    );
     const historyText = logs.rows.map((r) => r.chat_log).join('\n');
 
     const theme = debateResult.rows[0].theme;
     const stance = theme.split(' / ')[1] || '';
 
-    const prompt = `あなたは論理学に精通した鋭いAIディベーターです。
-テーマ: ${theme} / あなたの立場: ${stance}
+    // --- 難易度判定ロジック ---
+    const difficulty = theme.includes('[弱]') ? '弱' : 
+                       theme.includes('[強]') ? '強' : '中';
+
+    let aiPersonality = "";
+    let extraInstruction = "";
+
+    if (difficulty === '弱') {
+      aiPersonality = "初心者に優しいディベーター";
+      extraInstruction = "相手の意見を尊重し、穏やかな口調で反論してください。論理的なミスがあっても厳しく追及せず、会話を広げるようにしてください。";
+    } else if (difficulty === '強') {
+      aiPersonality = "冷徹で最強の論破王";
+      extraInstruction = "相手の論理の矛盾を徹底的に突き、一切の妥協を許さず、冷酷かつ高度な語彙で反撃してください。";
+    } else {
+      aiPersonality = "論理的で標準的なディベーター";
+      extraInstruction = "筋の通らない点には的確に指摘を行い、標準的な強さで議論を行ってください。";
+    }
+
+    const prompt = `あなたは${aiPersonality}です。
+    テーマ: ${theme} / あなたの立場: ${stance}
 
 【指示】
-1. ユーザーの最新発言に含まれる矛盾や論理の弱点を突いてください。
-2. 150文字以内で、簡潔かつ攻撃的に反論してください。
-3. 学術的な議論なので、セーフティフィルターに触れないよう、言葉を選びつつも厳しい議論を行ってください。
+1. ${extraInstruction}
+2. ユーザーの最新発言に含まれる矛盾や論理の弱点を突いてください。
+3. 150文字以内で、簡潔に回答してください。
 
 【会話履歴】
 ${historyText}
 
 ユーザーの最新発言: ${message}`;
 
+    // Geminiの呼び出し
     let aiReply;
     try {
       aiReply = await callGemini(prompt);
@@ -331,9 +376,11 @@ ${historyText}
       aiReply = 'AI応答の取得に失敗したため簡易応答です。根拠を1つ具体化して続けてください。';
     }
 
+    // AIの返答を保存
     await pool.query('INSERT INTO "chat_log_table" ("discussion_ID", "chat_log") VALUES ($1, $2)', [debateId, `AI: ${aiReply}`]);
 
     return res.json({ aiReply });
+
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'failed to process debate message' });
@@ -354,14 +401,45 @@ app.post('/api/debate/end', async (req, res) => {
       return res.json({ debate: { id: ended.rows[0].discussions_ID, score: ended.rows[0].sum_score, mbti: ended.rows[0].mbti, summary: '' } });
     }
 
+    // --- 難易度の判定と評価基準の設定 ---
+    const themeStr = debate.theme || "";
+    const difficulty = themeStr.includes('[弱]') ? '弱' : 
+                       themeStr.includes('[強]') ? '強' : '中';
+
+    let evalInstruction = "";
+    if (difficulty === '弱') {
+      evalInstruction = `
+      【難易度: 弱 の特別ルール】
+      - ユーザーが一生懸命に論理を組み立てようとしている場合は、寛容に加点してください。
+      - 主張がテーマに沿っていれば、多少の論理的飛躍があっても7割以上の高得点を与えてください。
+      - ただし、以下の場合は「弱」であっても厳しく（各項目4割以下）採点してください。
+        1. 支離滅裂な言葉を並べているだけの場合。
+        2. テーマと全く関係のない話（例：あいうえお、とだけ送る等）をしている場合。
+        3. 議論を拒絶・放棄している場合。`;
+    } else if (difficulty === '強') {
+      evalInstruction = `
+      【重要：難易度「強」の採点基準】
+      - ユーザーは上級者です。非常に厳格かつ冷徹に採点してください。
+      - AIの高度な反論に対して、完璧な論理的一貫性と強力な証拠提示ができていない限り、高得点は与えないでください。
+      - 凡庸な回答は平均点（6割）以下とし、プロレベルの議論のみを高く評価してください。`;
+    } else {
+      evalInstruction = `
+      【重要：難易度「中」の採点基準】
+      - 標準的なディベートの基準で客観的に採点してください。
+      - 筋書きが通り、一般的な反論ができている場合は6割（各項目6割前後）を基準点としてください。
+      - 論理的な飛躍がある場合や、根拠が主観のみ（「〜だと思う」だけなど）の場合は、容赦なく5割以下に減点してください。
+      - 優れた洞察がある場合のみ、8割以上の加点を行ってください。`;
+    }
+
     const logs = await pool.query('SELECT "chat_log" FROM "chat_log_table" WHERE "discussion_ID" = $1 ORDER BY "chat_id" ASC', [debateId]);
     const historyText = logs.rows.map((r) => r.chat_log).join('\n');
 
     // 評価プロンプトの作成
-    // app.post('/api/debate/end', ...) 内の evalPrompt を修正
     const evalPrompt = `
     討論評価AIとして、以下の会話ログから「数値」および「MBTI」を判定してください。
     解説や講評などの文章は一切不要です。以下のフォーマットを厳守してください。
+
+    ${evalInstruction}
 
     【MBTI判定ガイドライン】
     - 外向(E)/内向(I): 発言の積極性、エネルギーの方向
@@ -385,27 +463,14 @@ app.post('/api/debate/end', async (req, res) => {
 
     let evaluationText;
     try {
-      // AIを呼び出す
       evaluationText = await callGemini(evalPrompt);
-      console.log("AI Evaluation Response:", evaluationText); // 通信成功時の内容を確認
+      console.log(`AI Evaluation (${difficulty}):`, evaluationText);
     } catch (geminiError) {
-      // エラーが発生した場合、ターミナルに詳細を表示させる
       console.error('--- Gemini API 呼び出し失敗 ---');
-      console.error('エラー内容:', geminiError.message);
-      
-      // 失敗した場合のみ予備データ。ただし、毎回これが出るなら上のエラーログを確認。
-      evaluationText = [
-        '論理性: 21',
-        '根拠: 14',
-        '反論力: 14',
-        '一貫性: 7',
-        '説得力: 7',
-        '表現力: 7',
-        'MBTI: INTP'
-      ].join('\n');
+      evaluationText = ['論理性: 15','根拠: 10','反論力: 10','一貫性: 5','説得力: 5','表現力: 5','MBTI: INTP'].join('\n');
     }
 
-    // 数値を抽出（正規表現を強化）
+    // 数値を抽出（parseEvaluationは既存のものを使用）
     const {
       score,
       mbti,

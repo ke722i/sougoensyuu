@@ -269,6 +269,11 @@ async function startGame(stance) {
   gameData.turn = gameData.maxTurn;
   gameData.isWaiting = false;
 
+  // --- 追加：難易度の取得 ---
+  const difficultyElement = document.querySelector('input[name="difficulty"]:checked');
+  const difficulty = difficultyElement ? difficultyElement.value : '中';
+  // -----------------------
+
   const themeText = document.getElementById('themeText');
   if (themeText) themeText.innerText = `テーマ: ${gameData.theme}`;
   updateTurnDisplay();
@@ -286,7 +291,6 @@ async function startGame(stance) {
 
   // ユーザーキャラ画像変更
   const userImg = document.getElementById('userImg');
-
   if (userImg && iconData[currentUserIcon]) {
     userImg.src = iconData[currentUserIcon].character;
   }
@@ -298,8 +302,14 @@ async function startGame(stance) {
 
   try {
     const res = await fetch('/api/debate/start', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: currentUser, theme: gameData.theme, stance })
+      method: 'POST', 
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        username: currentUser, 
+        theme: gameData.theme, 
+        stance,
+        difficulty: difficulty // ★ ここに difficulty を追加！
+      })
     });
     const data = await res.json();
     if (!res.ok) {
@@ -310,6 +320,43 @@ async function startGame(stance) {
     addMessage('ai', data.aiReply || '討論を開始します。');
   } catch {
     addMessage('ai', 'サーバー接続に失敗しました。');
+  }
+}
+
+async function handleStartBattle() {
+  const currentUsername = localStorage.getItem('username'); // 保存されているユーザー名
+  const selectedTheme = document.getElementById('themeTitle').innerText;
+  
+  // 立場（ボタンの選択状態などから取得）
+  const selectedStance = document.querySelector('.stance-btn.active')?.innerText || "未選択";
+
+  // --- ここで難易度を取得 ---
+  const difficultyElement = document.querySelector('input[name="difficulty"]:checked');
+  const difficulty = difficultyElement ? difficultyElement.value : "中"; 
+
+  // サーバーへ送信
+  try {
+    const response = await fetch('/api/debate/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: currentUsername,
+        theme: selectedTheme,
+        stance: selectedStance,
+        difficulty: difficulty // 難易度を送信！
+      })
+    });
+
+    const data = await response.json();
+    if (response.ok) {
+      // 画面を対戦画面に切り替える処理など
+      console.log("討論開始！ ID:", data.debate.id);
+      showScreen('debate-screen'); 
+    } else {
+      alert("エラー: " + data.error);
+    }
+  } catch (error) {
+    console.error("通信エラー:", error);
   }
 }
 
