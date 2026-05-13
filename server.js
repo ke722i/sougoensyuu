@@ -519,13 +519,31 @@ app.get('/api/health', async (_req, res) => {
 
 app.get('/api/ranking', async (req, res) => {
   try {
-    const period = String(req.query.period || 'today');
-    let startExpr = "date_trunc('day', CURRENT_TIMESTAMP)";
-    if (period === 'week') startExpr = "date_trunc('week', CURRENT_TIMESTAMP)";
-    if (period === 'month') startExpr = "date_trunc('month', CURRENT_TIMESTAMP)";
-    if (!['today', 'week', 'month'].includes(period)) {
-      return res.status(400).json({ error: 'period must be today/week/month' });
-    }
+  const period = String(req.query.period || 'week');
+  
+  // バリデーションを先に通す
+  if (!['week', 'month', 'year'].includes(period)) {
+    return res.status(400).json({ error: 'period must be week/month/year' });
+  }
+
+  // startExpr には SQL の関数を「文字列」として格納
+  let startExpr;
+  if (period === 'week') {
+    // 'week' は月曜日から始まる週の初めを返します
+    startExpr = "date_trunc('week', CURRENT_TIMESTAMP)";
+  } else if (period === 'month') {
+    startExpr = "date_trunc('month', CURRENT_TIMESTAMP)";
+  } else if (period === 'year') {
+    startExpr = "date_trunc('year', CURRENT_TIMESTAMP)";
+  }
+
+  // クエリ例（pgモジュールなどを使用している場合）
+  // テンプレートリテラルで startExpr を直接埋め込む際は、引用符で囲まないように注意
+  const query = `
+    SELECT * FROM battles 
+    WHERE created_at >= ${startExpr}
+    ORDER BY created_at DESC
+  `;
 
     const q = `
       SELECT
@@ -552,32 +570,30 @@ app.get('/api/ranking/debug', (_req, res) => {
   res.json({ ok: true, route: '/api/ranking' });
 });
 
-app.get('/api/user/stats/:username', async (req, res) => {
-  const { username } = req.params;
-  try {
-    // ユーザーIDの取得
-    const userResult = await pool.query('SELECT "user_ID" FROM "user_table" WHERE "name" = $1', [username]);
-    if (userResult.rowCount === 0) return res.status(404).json({ error: 'User not found' });
-    const userId = userResult.rows[0].user_ID;
+// server.js の例
+app.get('/api/user/stats/:username', (req, res) => {
+  const userId = req.params.userId;
+  
+  // データベース（NeDBなど）からそのユーザーの全履歴を取得
+  db.find({ userId: userId }, (err, docs) => {
+    if (err || docs.length === 0) {
+      return res.json({ avgScore: 0, estimatedMbti: "---" });
+    }
 
-    // 平均スコアと頻出MBTI（推定MBTI）を取得
-    const statsResult = await pool.query(`
-      SELECT 
-        ROUND(AVG(sum_score)) as avg_score,
-        MODE() WITHIN GROUP (ORDER BY mbti) as estimated_mbti
-      FROM log_table 
-      WHERE "user_ID" = $1 AND game_result = 'completed' AND mbti != 'UNKN'
-    `, [userId]);
+    // 平均スコアの計算
+    const totalScore = docs.reduce((sum, doc) => sum + Number(doc.score), 0);
+    const avgScore = Math.round(totalScore / docs.length);
 
-    const stats = statsResult.rows[0];
+    // 最新のMBTIを取得（または最も多いタイプを集計）
+    // ここでは一番新しい履歴のMBTIを返すと仮定
+    const latestDoc = docs.sort((a, b) => b.timestamp - a.timestamp)[0];
+    const estimatedMbti = latestDoc.mbti || "---";
+
     res.json({
-      avgScore: stats.avg_score || 0,
-      estimatedMbti: stats.estimated_mbti || '---'
+      avgScore: avgScore,
+      estimatedMbti: estimatedMbti
     });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Failed to fetch stats' });
-  }
+  });
 });
 
 initDB()

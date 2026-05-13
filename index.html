@@ -13,7 +13,7 @@
   =========================================== -->
   <div class="top-nav-container">
     <!-- ランキングボタン -->
-    <button id="ranking-btn" class="ranking-nav-btn" onclick="showRanking()">
+    <button id="rankingBtn" class="ranking-nav-btn" onclick="showRanking()">
       <span class="trophy-icon">🏆</span> ランキング
     </button>
 
@@ -42,9 +42,9 @@
         <h2 class="main-title">🏆 ランキング</h2>
         <div class="filter-area">
           <select id="rankingPeriod" class="auth-input" onchange="updateRankingList()">
-            <option value="today">今週のランキング</option>
-            <option value="week">今月のランキング</option>
-            <option value="month">今年のランキング</option>
+            <option value="week">今週のランキング</option>
+            <option value="month">今月のランキング</option>
+            <option value="year">今年のランキング</option>
           </select>
         </div>
         <div id="rankingList" class="history-container scrollable">
@@ -60,7 +60,6 @@
         <div class="auth-logo">
           <img src="logo.png" alt="LOGO">
         </div>
-        <h1 class="main-title">新規登録</h1>
         <div class="auth-form">
           <div class="icon-select-area">
             <p class="icon-select-title">アイコンを選択</p>
@@ -157,6 +156,25 @@
         <h2 id="themeTitle">テーマタイトル</h2>
         <p>あなたの立場を選択してください</p>
         <div id="stanceButtons" class="stance-group"></div>
+        <div class="difficulty-section">
+          <p class="selection-label">難易度を選択</p>
+          <div class="difficulty-group">
+            <input type="radio" name="difficulty" id="easy" value="easy">
+            <label for="easy" class="diff-btn">
+              <span class="diff-name">弱</span>
+            </label>
+
+            <input type="radio" name="difficulty" id="normal" value="normal" checked>
+            <label for="normal" class="diff-btn">
+              <span class="diff-name">中</span>
+            </label>
+
+            <input type="radio" name="difficulty" id="hard" value="hard">
+            <label for="hard" class="diff-btn">
+              <span class="diff-name">強</span>
+            </label>
+          </div>
+        </div>
         <button class="back-link" onclick="showScreen('theme-screen')">テーマ選び直す</button>
       </div>
     </div>

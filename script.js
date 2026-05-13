@@ -144,6 +144,7 @@ async function handleSignup() {
     updateUserIDDisplay(currentUser);
     showScreen('theme-screen');
     showNotification('新規登録が完了しました');
+    document.getElementById('rankingBtn').style.display = 'flex';
   } catch {
     showNotification('サーバー接続に失敗しました', '#e95464');
   }
@@ -172,6 +173,7 @@ async function handleLogin() {
     updateUserIDDisplay(currentUser);
     showScreen('theme-screen');
     showNotification('ログインしました');
+    document.getElementById('rankingBtn').style.display = 'flex';
   } catch {
     showNotification('サーバー接続に失敗しました', '#e95464');
   }
@@ -186,6 +188,9 @@ function logout() {
   currentUserIcon = "icon1";
 
   updateUserIDDisplay(null);
+
+  const rankingBtn = document.getElementById('rankingBtn');
+  if (rankingBtn) rankingBtn.style.display = 'none';
 
   showScreen('login-screen');
 }
@@ -457,47 +462,36 @@ async function showHistory() {
     const debates = Array.isArray(data.debates) ? data.debates : [];
 
     /* =========================
-      プロフィール表示更新
+      プロフィール表示更新 (追加・修正)
     ========================= */
 
     // ユーザー名
-    document.getElementById('mypageUserId').innerText =
-      currentUser + "さん";
+    document.getElementById('mypageUserId').innerText = currentUser + "さん";
 
     // アイコン
     if (iconData[currentUserIcon]) {
-
-      document.getElementById('mypageIcon').src =
-        iconData[currentUserIcon].menu;
+      document.getElementById('mypageIcon').src = iconData[currentUserIcon].menu;
     }
 
-    function changeUserName() {
+    // --- 【追加】統計（平均スコアとMBTI）の計算と反映 ---
+    if (debates.length > 0) {
+      // 1. 平均スコアの計算 (nullやundefinedを除外して計算)
+      const validScores = debates.filter(d => d.score !== null && d.score !== undefined);
+      const totalScore = validScores.reduce((sum, item) => sum + Number(item.score), 0);
+      const avgScore = validScores.length > 0 ? Math.round(totalScore / validScores.length) : 0;
+      
+      // 2. 最新のMBTIを取得 (配列の最初が最新と想定)
+      const latestMbti = debates[0].mbti || "---";
 
-      const newName = prompt("新しいIDを入力してください");
-      if (!newName) return;
-      currentUser = newName;
-      updateUserIDDisplay(currentUser);
-      document.getElementById('mypageUserId').innerText =
-        currentUser;
-      showNotification("IDを変更しました");
+      // 3. 画面に反映
+      document.getElementById('mypageAverage').innerText = avgScore;
+      document.getElementById('mypageMbti').innerText = latestMbti;
+    } else {
+      // 履歴がない場合はリセット
+      document.getElementById('mypageAverage').innerText = "0";
+      document.getElementById('mypageMbti').innerText = "---";
     }
-
-    function changeUserIcon() {
-      const icons = ["icon1", "icon2", "icon3", "icon4", "icon5"];
-      let currentIndex = icons.indexOf(currentUserIcon);
-      currentIndex++;
-      if (currentIndex >= icons.length) {
-        currentIndex = 0;
-      }
-
-      currentUserIcon = icons[currentIndex];
-      // 右上更新
-      updateUserIDDisplay(currentUser);
-      // マイページ更新
-      document.getElementById('mypageIcon').src =
-        iconData[currentUserIcon].menu;
-      showNotification("アイコンを変更しました");
-    }
+    // ----------------------------------------------
 
     if (debates.length === 0) {
       list.innerHTML = "<p style='text-align:center;'>履歴はまだありません</p>";
@@ -510,7 +504,8 @@ async function showHistory() {
       const div = document.createElement('div');
       div.className = 'history-item';
       const dt = item.date_time ? new Date(item.date_time).toLocaleString() : '-';
-      div.innerHTML = `<small style=\"color:#666;\">${dt}</small><br><strong>${item.theme || '-'}</strong><br>状態: ${item.status || '-'} / スコア: <span style=\"color:#e95464;\">${item.score ?? '-'}点</span> / MBTI: ${item.mbti || '-'}`;
+      div.innerHTML = `<small style="color:#666;">${dt}</small><br><strong>${item.theme || '-'}</strong><br>状態: ${item.status || '-'} / スコア: <span style="color:#e95464;">${item.score ?? '-'}点</span> / MBTI: ${item.mbti || '-'}`;
+      
       div.onclick = async () => {
         try {
           const r = await fetch(`/api/debates/${item.id}/messages`);
@@ -530,8 +525,10 @@ async function showHistory() {
       };
       list.appendChild(div);
     });
+    
     showScreen('history-screen');
-  } catch {
+  } catch (e) {
+    console.error(e);
     list.innerHTML = "<p style='text-align:center;color:#e95464;'>サーバー接続に失敗しました</p>";
     showScreen('history-screen');
   }
