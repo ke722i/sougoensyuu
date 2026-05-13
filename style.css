@@ -275,15 +275,6 @@ body, html {
   /* 背景画像を入れる場合はここに url() を追加 */
 }
 
-/* 共通のタイトルデザイン */
-.main-title {
-  font-size: 3rem;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 0.5rem;
-  text-shadow: 0 2px 10px rgba(255,255,255,0.8);
-}
-
 .screen-title {
   font-size: 1.8rem;
   color: #333;
@@ -313,7 +304,7 @@ body, html {
 
 /* 戻るリンク */
 .back-link {
-  margin-top: 2rem;
+  margin-top: auto;
   background: rgba(0, 0, 0, 0.1);
   border: none;
   padding: 8px 20px;
@@ -321,6 +312,7 @@ body, html {
   cursor: pointer;
   font-weight: bold;
   color: #555;
+  flex-shrink: 0;
 }
 
 /* ==========================================================================
@@ -422,26 +414,110 @@ body, html {
   color: white !important;
 }
 
-/* --- 立場選択画面 --- */
+/* --- 立場選択画面（カード内のレイアウト） --- */
+.stance-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 90%;
+  max-width: 450px; /* カードの横幅を最適化 */
+  padding: 30px;
+  box-sizing: border-box;
+}
+
+/* 立場選択ボタンのコンテナ */
 #stanceButtons {
   display: flex;
-  gap: 20px;
+  flex-direction: column; /* 縦に並べることでカード内に収まりやすくする */
+  gap: 12px;
+  width: 100%;
   margin-bottom: 20px;
 }
 
 #stanceButtons button {
-  padding: 20px 40px;
-  font-size: 1.2rem;
+  width: 100%; /* 横幅いっぱい */
+  padding: 15px; /* 少し高さを抑える */
+  font-size: 1.1rem;
   background: white;
   border: 2px solid #e95464;
-  border-radius: 20px;
+  border-radius: 15px; /* 角丸を少し控えめに */
   color: #e95464;
+  cursor: pointer;
   transition: all 0.3s;
+  box-sizing: border-box;
 }
 
 #stanceButtons button:hover {
   background: #e95464;
   color: white;
+}
+
+/* --- 難易度選択セクション --- */
+.difficulty-section {
+  width: 100%;
+  margin-top: 10px;
+  text-align: center;
+}
+
+.selection-label {
+  font-weight: bold;
+  color: #666;
+  font-size: 0.85rem;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.difficulty-group {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  justify-content: center;
+}
+
+/* ラジオボタン本体は隠す */
+.difficulty-group input[type="radio"] {
+  display: none;
+}
+
+/* 難易度ボタンのデザイン */
+.diff-btn {
+  flex: 1;
+  background: #f8f8f8;
+  border: 1px solid #ddd;
+  padding: 10px 5px;
+  border-radius: 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.diff-name {
+  font-weight: bold;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+/* ホバー時 */
+.diff-btn:hover {
+  background: #eee;
+}
+
+/* 選択された時のスタイル */
+input[type="radio"]:checked + .diff-btn {
+  background: #fff;
+  border: 2px solid #e95464; /* 枠線を太くして強調 */
+  box-shadow: 0 2px 8px rgba(233, 84, 100, 0.15);
+}
+
+input[type="radio"]:checked + .diff-btn .diff-name {
+  color: #e95464;
+}
+
+/* 下部の「テーマ選び直す」リンクなど */
+.back-link {
+  margin-top: 20px;
+  font-size: 0.8rem;
+  padding: 8px 20px;
 }
 
 /* 丸アイコン */
@@ -645,10 +721,20 @@ body, html {
 /* --- モーダル (前回の設定を維持しつつ調整) --- */
 .modal-content {
   background: white;
+
   padding: 40px;
+
   border-radius: 25px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  max-width: 400px;
+
+  max-width: 500px;
+
+  width: 90%;
+
+  max-height: 80vh;
+
+  overflow-y: auto;
+
+  box-sizing: border-box;
 }
 
 .modal-buttons {
@@ -1049,7 +1135,8 @@ body, html {
   flex-direction: column;
 
   box-shadow: 0 15px 35px rgba(0,0,0,0.12);
-  min-height: 800px;
+  height: 80vh;
+  min-height: 0;
 }
 
 .history-main-title {
@@ -1059,6 +1146,48 @@ body, html {
   margin-bottom: 20px;
 
   text-align: center;
+}
+
+.ranking-card {
+  display: flex;
+  flex-direction: column;
+  height: 80vh;
+  min-height: 0;
+  padding: 30px;
+  background: rgba(255,255,255,0.88);
+  border-radius: 30px;
+}
+ 
+#rankingList {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 8px;
+  max-height: 100%;
+}
+ 
+.ranking-card,
+.mypage-history-card {
+  width: 95%;       /* 追加 or 変更 */
+  max-width: 65t0px; /* ここを大きくする */
+}
+
+/* =========================
+   ランキング・履歴カード共通
+========================= */
+
+.auth-card,
+.mypage-history-card {
+  display: flex;
+  flex-direction: column;
+}
+
+/* スクロール部分 */
+.history-container,
+#rankingList {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 /* =========================
@@ -1153,6 +1282,9 @@ body, html {
   transform: translateY(-2px);
 }
 
+#rankingBtn {
+  display: none;
+}
 /* =========================
    MBTI・スコア
 ========================= */
