@@ -691,7 +691,7 @@ function renderTable(tableId, list) {
         return;
     }
 
-    tbody.innerHTML = list.map((item, index) => `
+    tbody.innerHTML = list.slice(0, 10).map((item, index) => `
         <tr>
             <td>${index + 1}</td>
             <td>${item.name}</td>

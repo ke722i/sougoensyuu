@@ -1316,22 +1316,9 @@ input[type="radio"]:checked + .diff-btn .diff-name {
 }
 
 .ranking-card {
-  display: flex;
-  flex-direction: column;
-
-  width: 95%;
-  max-width: 1100px;
-
-  height: 80vh;
-  min-height: 0;
-
-  padding: 30px;
-
-  background: rgba(255,255,255,0.88);
-
-  border-radius: 30px;
-
-  margin: 0 auto;
+  max-width: 500px; /* 横幅を少し広げて一行をスッキリさせる */
+  min-height: auto; /* 余計な高さを取らない */
+  padding: 20px;
 }
  
 #rankingList {
@@ -1339,7 +1326,7 @@ input[type="radio"]:checked + .diff-btn .diff-name {
 
   overflow-y: auto;
 
-  min-height: 0;
+  min-height: auto;
 
   max-height: 100%;
 
@@ -1371,7 +1358,7 @@ input[type="radio"]:checked + .diff-btn .diff-name {
 #rankingList {
   flex: 1;
   overflow-y: auto;
-  min-height: 0;
+  min-height: auto;
 }
 
 /* =========================
@@ -1602,8 +1589,7 @@ input[type="radio"]:checked + .diff-btn .diff-name {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  margin-bottom: 20px;
-  width: 100%;
+  margin-bottom: 15px;
 }
 
 /* プルダウンを短く設定 */
@@ -1672,4 +1658,89 @@ input[type="radio"]:checked + .diff-btn .diff-name {
   color: #999;
   font-size: 0.85rem;
   padding-bottom: 10px;
+}
+
+/* --- ランキング画面を1画面に収めるための究極調整 --- */
+
+/* --- ランキング画面：枠サイズ固定・中身の空白埋めと大型化 --- */
+
+/* 1. 白い枠（カード）のサイズを維持 */
+.ranking-card {
+  max-width: 800px !important; /* 指定のサイズをキープ */
+  padding: 45px !important;    /* 指定の余白をキープ */
+  height: 85vh;               /* 画面に対する高さを指定 */
+  min-height: 650px;          /* 小さくなりすぎないよう下限を設定 */
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  margin: 0 auto;
+}
+
+/* 2. テーブルエリアをカード内の余白に合わせて広げる */
+.ranking-tables-wrapper {
+  flex: 1; 
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 3. テーブル自体の調整：高さを100%にして空白を埋める */
+.ranking-table {
+  width: 100%;
+  height: 100%;          /* テーブルを枠いっぱいに伸ばす */
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+/* 4. ヘッダーのデザイン（文字を少し大きく） */
+.ranking-table th {
+  font-size: 1.2rem;
+  padding-bottom: 15px;
+  border-bottom: 3px solid #eee; /* ヘッダー下の太い線 */
+  color: #666;
+}
+
+/* 5. 各行のデザイン：フォント拡大とセパレーター */
+.ranking-table td {
+  font-size: 1.2rem;     /* 文字をかなり大きく設定 */
+  border-bottom: 1px solid #f0f0f0; /* 順位ごとのセパレーター */
+  vertical-align: middle;
+  text-align: center;
+  /* paddingを最小限にし、heightで高さを均等に分配 */
+  padding: 0 !important; 
+}
+
+/* 6. 順位（数字）をさらに強調 */
+.ranking-table td:first-child {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #333;
+  width: 80px;
+}
+
+/* 7. 最後の行の線は消してスッキリさせる */
+.ranking-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* 8. フィルターとタイトルの調整（詰まりすぎない程度に） */
+.ranking-card .main-title {
+  margin-top: 0;
+  margin-bottom: 15px !important;
+  font-size: 1.8rem;
+}
+
+.filter-controls {
+  margin-bottom: 15px !important;
+}
+
+#currentRankTitle {
+  margin-bottom: 10px !important;
+  font-size: 1.2rem;
+}
+
+/* 戻るボタンを一番下に配置 */
+.ranking-card .back-link {
+  margin-top: auto; 
+  padding-top: 20px;
 }
