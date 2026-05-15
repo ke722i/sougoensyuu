@@ -35,25 +35,6 @@
     <!-- ==========================================
       2. 各画面（スクリーン） 
     =========================================== -->
-
-    <!-- ランキング画面 -->
-    <div id="ranking-screen" class="screen">
-      <div class="auth-card ranking-card">
-        <h2 class="main-title">🏆 ランキング</h2>
-        <div class="filter-area">
-          <select id="rankingPeriod" class="auth-input" onchange="updateRankingList()">
-            <option value="week">今週のランキング</option>
-            <option value="month">今月のランキング</option>
-            <option value="year">今年のランキング</option>
-          </select>
-        </div>
-        <div id="rankingList" class="history-container scrollable">
-          <!-- JSで動的に挿入 -->
-        </div>
-        <button class="back-link" onclick="showScreen('theme-screen')">テーマ選択に戻る</button>
-      </div>
-    </div>
-
     <!-- 新規登録画面 -->
     <div id="signup-screen" class="screen">
       <div class="auth-card">
@@ -125,6 +106,40 @@
       </div>
     </div>
 
+    <div id="ranking-screen" class="screen">
+      <div class="auth-card ranking-card">
+        <h2 class="main-title">🏆 ランキング</h2>
+        
+        <div class="filter-controls">
+          <select id="rankingPeriod" class="auth-input-small" onchange="updateRankingList()">
+            <option value="week">週</option>
+            <option value="month">月</option>
+            <option value="year">年</option>
+          </select>
+
+          <div class="diff-button-group">
+            <button id="btn-easy" class="diff-tab active" onclick="changeDiffTab('easy')">弱</button>
+            <button id="btn-normal" class="diff-tab" onclick="changeDiffTab('normal')">中</button>
+            <button id="btn-hard" class="diff-tab" onclick="changeDiffTab('hard')">強</button>
+          </div>
+        </div>
+
+        <div class="ranking-tables-wrapper scrollable">
+          <section class="ranking-section">
+            <h3 id="currentRankTitle" class="rank-title rank-easy"> 弱モードランキング</h3>
+            <table class="ranking-table" id="rankingTableMain">
+              <thead>
+                <tr><th>位</th><th>ユーザー</th><th>点数</th><th>MBTI</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </section>
+        </div>
+        <button class="back-link" onclick="goBack()">戻る</button>
+      </div>
+    </div>
+
+
     <!-- マイページ（履歴）画面 -->
     <div id="history-screen" class="screen">
       <div class="mypage-layout">
@@ -132,7 +147,7 @@
         <div class="mypage-history-card">
           <h2 class="main-title history-main-title">議論履歴</h2>
           <div id="historyList" class="history-container"></div>
-          <button class="back-link" onclick="showScreen('theme-screen')">テーマ選択に戻る</button>
+          <button class="back-link" onclick="goBack()">戻る</button>
         </div>
         <!-- 右：プロフィール -->
         <div class="mypage-profile-card">

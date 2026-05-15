@@ -584,50 +584,48 @@ app.get('/api/health', async (_req, res) => {
 
 app.get('/api/ranking', async (req, res) => {
   try {
-  const period = String(req.query.period || 'week');
-  
-  // バリデーションを先に通す
-  if (!['week', 'month', 'year'].includes(period)) {
-    return res.status(400).json({ error: 'period must be week/month/year' });
-  }
-
-  // startExpr には SQL の関数を「文字列」として格納
-  let startExpr;
-  if (period === 'week') {
-    // 'week' は月曜日から始まる週の初めを返します
-    startExpr = "date_trunc('week', CURRENT_TIMESTAMP)";
-  } else if (period === 'month') {
-    startExpr = "date_trunc('month', CURRENT_TIMESTAMP)";
-  } else if (period === 'year') {
-    startExpr = "date_trunc('year', CURRENT_TIMESTAMP)";
-  }
-
-  // クエリ例（pgモジュールなどを使用している場合）
-  // テンプレートリテラルで startExpr を直接埋め込む際は、引用符で囲まないように注意
-  const query = `
-    SELECT * FROM battles 
-    WHERE created_at >= ${startExpr}
-    ORDER BY created_at DESC
-  `;
-
-    const q = `
-      SELECT
-        u."name" AS name,
-        l."theme" AS theme,
-        l."sum_score" AS score,
-        l."date_time" AS date_time
+    // 過去1年分（年ランキング用）の完了済みデータを一括取得
+    const query = `
+      SELECT u.name, l.theme, l.sum_score, l.mbti, l.date_time
       FROM "log_table" l
-      JOIN "user_table" u ON u."user_ID" = l."user_ID"
-      WHERE l."game_result" = 'completed'
-        AND l."date_time" >= ${startExpr}
-      ORDER BY l."sum_score" DESC, l."date_time" DESC
-      LIMIT 10
+      JOIN "user_table" u ON l."user_ID" = u."user_ID"
+      WHERE l.game_result = 'completed'
+      AND l.date_time >= NOW() - INTERVAL '1 year'
+      ORDER BY l.sum_score DESC
     `;
-    const result = await pool.query(q);
-    return res.json({ period, ranking: result.rows });
+    const result = await pool.query(query);
+    const allData = result.rows;
+
+    // フィルタリング用ヘルパー関数
+    const filterData = (diffKeyword, days) => {
+      let filtered = allData;
+      
+      // 難易度でフィルタ
+      if (diffKeyword === '中') {
+        filtered = filtered.filter(r => r.theme.includes('[中]') || (!r.theme.includes('[弱]') && !r.theme.includes('[強]')));
+      } else {
+        filtered = filtered.filter(r => r.theme.includes(`[${diffKeyword}]`));
+      }
+
+      // 期間でフィルタ
+      if (days !== 'year') {
+        const limit = new Date();
+        limit.setDate(limit.getDate() - (days === 'week' ? 7 : 30));
+        filtered = filtered.filter(r => new Date(r.date_time) >= limit);
+      }
+      
+      return filtered.slice(0, 10); // 上位10件を返す
+    };
+
+    // レスポンス構造の作成
+    res.json({
+      easy: { week: filterData('弱', 'week'), month: filterData('弱', 'month'), year: filterData('弱', 'year') },
+      normal: { week: filterData('中', 'week'), month: filterData('中', 'month'), year: filterData('中', 'year') },
+      hard: { week: filterData('強', 'week'), month: filterData('強', 'month'), year: filterData('強', 'year') }
+    });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ error: 'failed to fetch ranking' });
+    res.status(500).json({ error: 'Ranking failed' });
   }
 });
 
