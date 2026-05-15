@@ -681,24 +681,45 @@ async function updateRankingList(forceFetch = false) {
     }
 }
 
-// テーブル描画
 function renderTable(tableId, list) {
-    const tbody = document.querySelector(`#${tableId} tbody`);
-    if (!tbody) return;
+    const container = document.getElementById(tableId);
+    if (!container) return;
     
     if (!list || list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="color:gray; padding:20px;">記録がありません</td></tr>';
+        container.innerHTML = '<p style="color:gray; text-align:center; padding:20px;">記録がありません</p>';
         return;
     }
 
-    tbody.innerHTML = list.slice(0, 10).map((item, index) => `
-        <tr>
-            <td>${index + 1}</td>
-            <td>${item.name}</td>
-            <td>${item.sum_score}点</td>
-            <td>${item.mbti}</td>
-        </tr>
-    `).join('');
+    const iconMap = {
+        'icon1': '01_hiyoko.png',
+        'icon2': '03_risu.png',
+        'icon3': '05_pengin.png',
+        'icon4': '07_gorira.png',
+        'icon5': '09_ma-motto.png'
+    };
+
+    container.innerHTML = list.slice(0, 10).map((item, index) => {
+        const iconFile = iconMap[item.icon] || '01_hiyoko.png';
+        const cleanTheme = item.theme.replace(/\[.*?\]/g, '').trim();
+
+        return `
+        <div class="rank-user-card">
+            <div class="rank-badge">${index + 1}</div>
+            <img src="icon_png/${iconFile}" class="rank-avatar">
+            <div class="rank-info">
+                <div class="rank-top-row">
+                    <span class="rank-username">${item.name}</span>
+                    <span class="rank-user-mbti">${item.mbti}</span>
+                </div>
+                <div class="rank-theme-name">${cleanTheme}</div>
+            </div>
+            <div class="rank-score-box">
+                <span class="rank-score-val">${item.sum_score}</span>
+                <span class="rank-score-unit">点</span>
+            </div>
+        </div>
+        `;
+    }).join('');
 }
 
 function openModal(msg, confirmText, cancelText, cb) {

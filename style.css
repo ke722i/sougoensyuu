@@ -1315,28 +1315,6 @@ input[type="radio"]:checked + .diff-btn .diff-name {
   text-align: center;
 }
 
-.ranking-card {
-  max-width: 500px; /* 横幅を少し広げて一行をスッキリさせる */
-  min-height: auto; /* 余計な高さを取らない */
-  padding: 20px;
-}
- 
-#rankingList {
-  flex: 1;
-
-  overflow-y: auto;
-
-  min-height: auto;
-
-  max-height: 100%;
-
-  width: 100%;
-
-  padding-right: 8px;
-
-  box-sizing: border-box;
-}
- 
 .ranking-card,
 .mypage-history-card {
   width: 95%;       /* 追加 or 変更 */
@@ -1663,84 +1641,223 @@ input[type="radio"]:checked + .diff-btn .diff-name {
 /* --- ランキング画面を1画面に収めるための究極調整 --- */
 
 /* --- ランキング画面：枠サイズ固定・中身の空白埋めと大型化 --- */
+/* --- ランキング：枠サイズ固定 & 10人分カードレイアウト --- */
 
-/* 1. 白い枠（カード）のサイズを維持 */
 .ranking-card {
-  max-width: 800px !important; /* 指定のサイズをキープ */
-  padding: 45px !important;    /* 指定の余白をキープ */
-  height: 85vh;               /* 画面に対する高さを指定 */
-  min-height: 650px;          /* 小さくなりすぎないよう下限を設定 */
+  max-width: 700px !important;
+  width: 700px !important;
+  height: 700px !important;    /* 10人分入る枠のサイズを固定 */
+  padding: 40px !important;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
   margin: 0 auto;
 }
 
-/* 2. テーブルエリアをカード内の余白に合わせて広げる */
-.ranking-tables-wrapper {
-  flex: 1; 
+.rank-user-card {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  padding: 0 20px;
+  height: 60px;
+  min-height: 60px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+/* 2. ランキングリストを表示するエリア */
+.ranking-container {
+  /* flex: 1; を解除（中身に合わせて伸びるのを防ぐ） */
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  gap: 10px;                  /* カード同士の隙間を固定 */
+  margin-top: 15px;
+  overflow-y: auto;           /* 万が一10人を超えてもスクロール可能に */
+  height: 650px;              /* 10人分のカードが収まるエリアの高さ */
 }
 
-/* 3. テーブル自体の調整：高さを100%にして空白を埋める */
-.ranking-table {
-  width: 100%;
-  height: 100%;          /* テーブルを枠いっぱいに伸ばす */
-  border-collapse: collapse;
-  table-layout: fixed;
+/* 3. 個別のユーザーカード（10枚並ぶ前提） */
+.rank-user-card {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 12px;
+  padding: 0 20px;
+  
+  /* 1枚の高さを「10人いる時と同じサイズ」で固定 */
+  height: 55px;               /* 10人並んだ時にちょうど良い高さ */
+  min-height: 55px;           /* 人数が少なくても縮まないように固定 */
+  
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
+  flex-shrink: 0;             /* 枠が狭くてもカードが潰れないようにする */
 }
 
-/* 4. ヘッダーのデザイン（文字を少し大きく） */
-.ranking-table th {
-  font-size: 1.2rem;
-  padding-bottom: 15px;
-  border-bottom: 3px solid #eee; /* ヘッダー下の太い線 */
-  color: #666;
-}
-
-/* 5. 各行のデザイン：フォント拡大とセパレーター */
-.ranking-table td {
-  font-size: 1.2rem;     /* 文字をかなり大きく設定 */
-  border-bottom: 1px solid #f0f0f0; /* 順位ごとのセパレーター */
-  vertical-align: middle;
-  text-align: center;
-  /* paddingを最小限にし、heightで高さを均等に分配 */
-  padding: 0 !important; 
-}
-
-/* 6. 順位（数字）をさらに強調 */
-.ranking-table td:first-child {
-  font-size: 1.2rem;
+/* 順位バッジ */
+.rank-badge {
+  font-size: 1.5rem;
   font-weight: bold;
+  width: 45px;
+  color: #444;
+  text-align: center;
+}
+
+/* アバター（アイコン） */
+.rank-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  margin: 0 15px;
+  background: #fff;
+  border: 1px solid #eee;
+  object-fit: cover;
+}
+
+/* 中央の情報エリア */
+.rank-info {
+  width: 300px;         /* ユーザー名とテーマが表示されるエリアの横幅 */
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start; /* 中身を左寄せにする */
+  overflow: hidden;
+  margin-right: 15px;
+}
+
+.rank-top-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 2px; /* テーマとの隙間 */
+}
+
+.rank-username {
+  font-weight: bold;
+  font-size: 1.1rem;
   color: #333;
-  width: 80px;
+  
+  /* 長い名前をカットして「...」にする */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px; 
 }
 
-/* 7. 最後の行の線は消してスッキリさせる */
-.ranking-table tr:last-child td {
-  border-bottom: none;
+.rank-theme-name {
+  font-size: 0.8rem;
+  color: #666;
+  text-align: left;    /* 左寄せ */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
 }
 
-/* 8. フィルターとタイトルの調整（詰まりすぎない程度に） */
-.ranking-card .main-title {
-  margin-top: 0;
-  margin-bottom: 15px !important;
+/* スコア表示 */
+.rank-score-box {
+  margin-left: auto;   /* 左側の要素の長さに関わらず右端へ */
+  text-align: right;
+  min-width: 90px;
+}
+
+.rank-score-val {
   font-size: 1.8rem;
+  font-weight: bold;
+  color: #e95464;
 }
 
-.filter-controls {
-  margin-bottom: 15px !important;
+.rank-score-unit {
+  font-size: 0.8rem;
+  color: #e95464;
+  margin-left: 2px;
 }
 
-#currentRankTitle {
-  margin-bottom: 10px !important;
-  font-size: 1.2rem;
+/* MBTI表示（右端） */
+.rank-user-mbti {
+  flex-shrink: 0;     /* 名前が長くてもタグが潰れないようにする */
+  font-size: 0.8rem;
+  background: #f0f4f8;
+  color: #4A90E2;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
 }
 
-/* 戻るボタンを一番下に配置 */
+/* 戻るボタンをカードの最下部に配置 */
 .ranking-card .back-link {
   margin-top: auto; 
-  padding-top: 20px;
+  padding-top: 10px;
+}
+
+/* --- 上位3位の特別演出（濃い金・銀・銅） --- */
+
+/* 1位：ゴールド */
+.rank-user-card:nth-child(1) {
+    background: linear-gradient(135deg, #ffd700 0%, #ffb900 100%) !important;
+    border: 2px solid #e6b800 !important;
+    box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+}
+.rank-user-card:nth-child(1) .rank-badge,
+.rank-user-card:nth-child(1) .rank-username {
+    color: #5c4b00 !important; /* 濃いめの文字色で視認性確保 */
+}
+.rank-user-card:nth-child(1) .rank-theme-name {
+    color: #7a6a00 !important;
+}
+
+/* 2位：シルバー */
+.rank-user-card:nth-child(2) {
+    background: linear-gradient(135deg, #e0e0e0 0%, #b0b0b0 100%) !important;
+    border: 2px solid #999 !important;
+    box-shadow: 0 4px 15px rgba(192, 192, 192, 0.3);
+}
+.rank-user-card:nth-child(2) .rank-badge,
+.rank-user-card:nth-child(2) .rank-username {
+    color: #333 !important;
+}
+.rank-user-card:nth-child(2) .rank-theme-name {
+    color: #555 !important;
+}
+
+/* 3位：ブロンズ（銅） */
+.rank-user-card:nth-child(3) {
+    background: linear-gradient(135deg, #cd7f32 0%, #a0522d 100%) !important;
+    border: 2px solid #8b4513 !important;
+    box-shadow: 0 4px 15px rgba(205, 127, 50, 0.3);
+}
+.rank-user-card:nth-child(3) .rank-badge,
+.rank-user-card:nth-child(3) .rank-username {
+    color: #fff !important; /* 銅は色が濃いので白文字に */
+}
+.rank-user-card:nth-child(3) .rank-theme-name {
+    color: #f0f0f0 !important;
+}
+.rank-user-card:nth-child(3) .rank-score-val {
+    color: #ffd1a4 !important; /* スコアも見やすい色に */
+}
+
+/* --- 全体のレイアウト維持用（前回の修正の再確認） --- */
+
+.rank-info {
+  width: 300px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start; /* 左寄せ */
+  overflow: hidden;
+  margin-right: 15px;
+}
+
+.rank-theme-name {
+  font-size: 0.8rem;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
 }
