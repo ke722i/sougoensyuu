@@ -4,6 +4,8 @@ let selectedIcon = "icon1";
 let currentDebateId = null;
 let gameData = { theme: '', stance: '', turn: 5, maxTurn: 5, isWaiting: false };
 let modalCallback = null;
+let screenHistory = [];
+let previousScreen = null;
 
 const backgrounds = {
   'signup-screen': 'url("back_png/back_01.jpg")',
@@ -51,19 +53,24 @@ const iconData = {
 };
 
 function showScreen(id) {
+  const current = document.querySelector('.screen.active')?.id;
+
+  if (current && current !== id) {
+    previousScreen = current;
+  }
+
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
+
   const target = document.getElementById(id);
   if (!target) return;
+
   target.classList.add('active');
 
   const menu = document.getElementById('user-menu');
   if (menu) menu.style.display = 'none';
 
-  if (id === 'login-screen' || id === 'signup-screen') updateUserIDDisplay(null);
-
   if (backgrounds[id]) {
-    const wrapper = document.querySelector('.game-wrapper');
-    if (wrapper) wrapper.style.backgroundImage = backgrounds[id];
+    document.querySelector('.game-wrapper').style.backgroundImage = backgrounds[id];
   }
 }
 
@@ -562,8 +569,46 @@ async function showHistory() {
             document.getElementById('modalCancel').style.display = 'none';
             return;
           }
-          const lines = (d.messages || []).map((m) => m.content).join('\n');
-          openModal(lines || 'チャット履歴はありません。', '閉じる', '戻る', null);
+          const modal = document.getElementById('customModal');
+          const content = document.querySelector('.modal-content');
+          const msgElem = document.getElementById('modalMessage');
+
+          content.classList.add('chat-log-modal');
+
+          console.log(d.messages);
+          const messages = (d.messages || []).map((m) => {
+
+            const text = String(m.content || "");
+
+            // ★ここが重要：contentから判定する
+            const isUser =
+              text.startsWith("USER:") ||
+              text.startsWith("User:") ||
+              text.startsWith("あなた:");
+
+            const type = isUser ? "user" : "ai";
+
+            // 表示用にラベルを消す
+            const cleanText = text
+              .replace(/^USER:\s*/i, "")
+              .replace(/^AI:\s*/i, "");
+
+            const name = type === "user" ? "あなた" : "AI";
+
+            return `
+              <div class="chat-log-message ${type}">
+                <div class="chat-log-name">${name}</div>
+                <div class="chat-log-text">${cleanText}</div>
+              </div>
+            `;
+          }).join('');
+
+          openModal(`
+            <div class="chat-log-container">
+              ${messages || 'チャット履歴はありません。'}
+            </div>
+          `, '閉じる', '戻る', null);
+
           document.getElementById('modalCancel').style.display = 'none';
         } catch {
           openModal('チャット履歴取得に失敗しました', '閉じる', '戻る', null);
@@ -581,46 +626,79 @@ async function showHistory() {
   }
 }
 
-function showRanking() {
-  showScreen('ranking-screen');
-  updateRankingList();
+let currentDiff = 'easy'; // 現在選択されている難易度を保存
+let cachedRankingData = null; // サーバーデータを保存
+
+// ランキング表示
+async function showRanking() {
+    showScreen('ranking-screen');
+    await updateRankingList(true); // 画面を開くときはサーバーから取得
 }
 
-async function updateRankingList() {
-  const periodSelect = document.getElementById('rankingPeriod');
-  const list = document.getElementById('rankingList');
-  if (!periodSelect || !list) return;
-
-  const period = periodSelect.value;
-  list.innerHTML = "<p style='text-align:center; color:#888; margin-top:20px;'>読み込み中...</p>";
-  try {
-    const res = await fetch(`/api/ranking?period=${encodeURIComponent(period)}`);
-    const data = await res.json();
-    if (!res.ok) {
-      list.innerHTML = `<p style='text-align:center; color:#e95464; margin-top:20px;'>${data.error || 'ランキング取得に失敗しました'}</p>`;
-      return;
-    }
-
-    const rows = Array.isArray(data.ranking) ? data.ranking : [];
-    if (rows.length === 0) {
-      list.innerHTML = "<p style='text-align:center; color:#888; margin-top:20px;'>データがありません</p>";
-      return;
-    }
-
-    list.innerHTML = '';
-    rows.forEach((item, index) => {
-      const row = document.createElement('div');
-      row.className = 'history-item';
-      row.style.display = 'flex';
-      row.style.alignItems = 'center';
-      row.style.justifyContent = 'space-between';
-      row.style.padding = '10px';
-      row.innerHTML = `<div style=\"display:flex;align-items:center;gap:10px;\"><span style=\"font-weight:bold;width:25px;color:#e95464;\">${index + 1}</span><img src=\"icon_png/01_hiyoko.png\" style=\"width:30px;height:30px;border-radius:50%;\"><div><div style=\"font-weight:bold;font-size:0.9rem;\">${item.name}</div><div style=\"font-size:0.75rem;color:#888;\">${item.theme}</div></div></div><div style=\"font-weight:bold;color:#4caf50;\">${item.score} pt</div>`;
-      list.appendChild(row);
+// 難易度ボタンが押された時の動作
+function changeDiffTab(diff) {
+    currentDiff = diff; // 選択された難易度（easy/normal/hard）を保存
+    
+    // 全ボタンから active クラスを消し、押されたボタンだけに付ける
+    document.querySelectorAll('.diff-tab').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('onclick').includes(`'${diff}'`)) {
+            btn.classList.add('active');
+        }
     });
-  } catch {
-    list.innerHTML = "<p style='text-align:center; color:#e95464; margin-top:20px;'>サーバー接続に失敗しました</p>";
-  }
+
+    // タイトルの更新
+    const titleElem = document.getElementById('currentRankTitle');
+    const titles = { easy: ' 弱モード', normal: ' 中モード', hard: ' 強モード' };
+    if (titleElem) {
+        titleElem.innerText = `${titles[diff]}ランキング`;
+        titleElem.className = `rank-title rank-${diff}`;
+    }
+
+    // 表示を更新
+    updateRankingList(false);
+}
+
+// データの取得と反映
+async function updateRankingList(forceFetch = false) {
+    try {
+        if (!cachedRankingData || forceFetch) {
+            const res = await fetch('/api/ranking');
+            cachedRankingData = await res.json();
+        }
+
+        // HTMLから選択中の「期間」を取得
+        const period = document.getElementById('rankingPeriod').value;
+        
+        // 選択中の「難易度」と「期間」でデータを抽出
+        const list = cachedRankingData[currentDiff][period];
+        
+        // メインテーブルに描画
+        renderTable('rankingTableMain', list);
+
+    } catch (error) {
+        console.error("ランキング更新失敗:", error);
+    }
+}
+
+// テーブル描画
+function renderTable(tableId, list) {
+    const tbody = document.querySelector(`#${tableId} tbody`);
+    if (!tbody) return;
+    
+    if (!list || list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="color:gray; padding:20px;">記録がありません</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = list.map((item, index) => `
+        <tr>
+            <td>${index + 1}</td>
+            <td>${item.name}</td>
+            <td>${item.sum_score}点</td>
+            <td>${item.mbti}</td>
+        </tr>
+    `).join('');
 }
 
 function openModal(msg, confirmText, cancelText, cb) {
@@ -645,8 +723,27 @@ function openModal(msg, confirmText, cancelText, cb) {
 }
 
 function closeModal() {
+
   const modal = document.getElementById('customModal');
-  if (modal) modal.style.display = 'none';
+
+  const content = document.querySelector('.modal-content');
+
+  if (content) {
+    content.classList.remove('chat-log-modal');
+  }
+
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+function goBack() {
+  if (previousScreen) {
+    showScreen(previousScreen);
+    previousScreen = null;
+  } else {
+    showScreen('theme-screen');
+  }
 }
 
 function handleResultButton() {
@@ -658,7 +755,7 @@ function handleResultButton() {
 }
 
 function backToTitle() {
-  openModal('中断してテーマ選択に戻りますか？', '中断する', '続ける', () => showScreen('theme-screen'));
+  openModal('前の画面に戻りますか？', '戻る', 'キャンセル', goBack);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
