@@ -474,13 +474,13 @@ async function showResult() {
 
         if (score <= 49) {
           outcomeEl.innerText = '敗北...';
-          outcomeEl.classList.add('result-lose');
+          outcomeEl.classList.add('result-敗北');
         } else if (score === 50) {
           outcomeEl.innerText = '引き分け';
-          outcomeEl.classList.add('result-draw');
+          outcomeEl.classList.add('result-引き分け');
         } else {
           outcomeEl.innerText = '勝利！';
-          outcomeEl.classList.add('result-win');
+          outcomeEl.classList.add('result-勝利');
         }
 
       } else {
@@ -527,25 +527,18 @@ async function showHistory() {
       document.getElementById('mypageIcon').src = iconData[currentUserIcon].menu;
     }
 
-    // --- 【追加】統計（平均スコアとMBTI）の計算と反映 ---
-    if (debates.length > 0) {
-      // 1. 平均スコアの計算 (nullやundefinedを除外して計算)
-      const validScores = debates.filter(d => d.score !== null && d.score !== undefined);
-      const totalScore = validScores.reduce((sum, item) => sum + Number(item.score), 0);
-      const avgScore = validScores.length > 0 ? Math.round(totalScore / validScores.length) : 0;
-      
-      // 2. 最新のMBTIを取得 (配列の最初が最新と想定)
-      const latestMbti = debates[0].mbti || "---";
-
-      // 3. 画面に反映
-      document.getElementById('mypageAverage').innerText = avgScore;
-      document.getElementById('mypageMbti').innerText = latestMbti;
-    } else {
-      // 履歴がない場合はリセット
-      document.getElementById('mypageAverage').innerText = "0";
-      document.getElementById('mypageMbti').innerText = "---";
+    // --- 【修正】統計（平均スコアとMBTI）をサーバーから取得して反映 ---
+    try {
+      const statsRes = await fetch(`/api/user/stats/${encodeURIComponent(currentUser)}`);
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        document.getElementById('mypageAverage').innerText = statsData.avgScore ?? 0;
+        document.getElementById('mypageMbti').innerText = statsData.estimatedMbti ?? "---";
+      }
+    } catch (statsError) {
+      console.error("統計データの取得に失敗:", statsError);
     }
-    // ----------------------------------------------
+    // -------------------------------------------------------
 
     if (debates.length === 0) {
       list.innerHTML = "<p style='text-align:center;'>履歴はまだありません</p>";
@@ -558,7 +551,7 @@ async function showHistory() {
       const div = document.createElement('div');
       div.className = 'history-item';
       const dt = item.date_time ? new Date(item.date_time).toLocaleString() : '-';
-      div.innerHTML = `<small style="color:#666;">${dt}</small><br><strong>${item.theme || '-'}</strong><br>状態: ${item.status || '-'} / スコア: <span style="color:#e95464;">${item.score ?? '-'}点</span> / MBTI: ${item.mbti || '-'}`;
+      div.innerHTML = `<small style="color:#666;">${dt}</small><br><strong>${item.theme || '-'}</strong><br>勝敗: ${item.status || '-'} / スコア: <span style="color:#e95464;">${item.score ?? '-'}点</span> / MBTI: ${item.mbti || '-'}`;
       
       div.onclick = async () => {
         try {
@@ -700,7 +693,6 @@ function renderTable(tableId, list) {
 
     container.innerHTML = list.slice(0, 10).map((item, index) => {
         const iconFile = iconMap[item.icon] || '01_hiyoko.png';
-        const cleanTheme = item.theme.replace(/\[.*?\]/g, '').trim();
 
         return `
         <div class="rank-user-card">
@@ -711,11 +703,11 @@ function renderTable(tableId, list) {
                     <span class="rank-username">${item.name}</span>
                     <span class="rank-user-mbti">${item.mbti}</span>
                 </div>
-                <div class="rank-theme-name">${cleanTheme}</div>
+                <div class="rank-theme-name">最高スコア: ${item.best_score}点 (${item.count}回プレイ)</div>
             </div>
             <div class="rank-score-box">
                 <span class="rank-score-val">${item.sum_score}</span>
-                <span class="rank-score-unit">点</span>
+                <span class="rank-score-unit">点(平均)</span>
             </div>
         </div>
         `;

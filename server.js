@@ -1,8 +1,21 @@
-﻿require('dotenv').config();
+﻿const fs = require('fs');
+const path = require('path');
+
+// .env ファイルの存在確認と作成
+if (!fs.existsSync('.env')) {
+  const envTemplate = `DATABASE_URL=postgres://postgres:password@localhost:5432/debate_db
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.0-flash
+`;
+  fs.writeFileSync('.env', envTemplate);
+  console.log('[ENV] .env ファイルが見つかりませんでした。テンプレートを作成しました。必要に応じて設定を編集してください。');
+}
+
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-const { Pool } = require('pg');
+const { Pool, Client } = require('pg');
 
 const app = express();
 app.use(cors());
@@ -12,11 +25,47 @@ app.use(express.static(__dirname));
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
 async function initDB() {
-  const dbInfo = await pool.query('SELECT current_database() AS db');
-  console.log(`[DB] 接続成功: ${dbInfo.rows[0].db}`);
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    console.error('[DB] DATABASE_URL が .env に設定されていません。');
+    return;
+  }
+
+  // 1. データベース自体の作成確認
+  try {
+    const url = new URL(connectionString);
+    const dbName = url.pathname.slice(1);
+    
+    // postgres デフォルトデータベースへ接続して、対象DBがあるか確認
+    const adminUrl = new URL(connectionString);
+    adminUrl.pathname = '/postgres';
+    
+    const client = new Client({ connectionString: adminUrl.toString() });
+    await client.connect();
+    
+    const dbExists = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [dbName]);
+    if (dbExists.rowCount === 0) {
+      // CREATE DATABASE はパラメータ化できないため、引用符で囲んで埋め込む
+      await client.query(`CREATE DATABASE "${dbName}"`);
+      console.log(`[DB] データベース "${dbName}" を作成しました`);
+    }
+    await client.end();
+  } catch (err) {
+    console.warn('[DB] データベースの自動作成をスキップします (既に存在するか、権限がない可能性があります):', err.message);
+  }
+
+  // 2. テーブルの作成確認
+  let dbInfo;
+  try {
+    dbInfo = await pool.query('SELECT current_database() AS db');
+    console.log(`[DB] 接続成功: ${dbInfo.rows[0].db}`);
+  } catch (err) {
+    console.error('[DB] データベースへの接続に失敗しました。DATABASE_URL を確認してください。:', err.message);
+    throw err;
+  }
 
   async function ensureTable(tableName, createSql) {
     const existsResult = await pool.query(
@@ -32,6 +81,19 @@ async function initDB() {
 
     await pool.query(createSql);
     console.log(`[TABLE] ${tableName}: 作成されました`);
+  }
+
+  // カラムの存在を確認して追加する関数
+  async function ensureColumn(tableName, columnName, dataType) {
+    const res = await pool.query(`
+      SELECT COUNT(*) FROM information_schema.columns 
+      WHERE table_name = $1 AND column_name = $2
+    `, [tableName, columnName]);
+    if (res.rows[0].count === '0') {
+      // DEFAULT 値がないと既存行でエラーになる可能性があるため、とりあえず空文字やデフォルト値を検討
+      await pool.query(`ALTER TABLE "${tableName}" ADD COLUMN "${columnName}" ${dataType}`);
+      console.log(`[COLUMN] ${tableName}.${columnName}: 追加されました`);
+    }
   }
 
   await ensureTable(
@@ -81,10 +143,14 @@ async function initDB() {
         "week_sum_score" INTEGER NOT NULL DEFAULT 0,
         "week_discussion_count" INTEGER NOT NULL DEFAULT 0,
         "week_average_score" DECIMAL(5,2) DEFAULT 0.00,
-        "target_week" DATE NOT NULL
+        "target_week" DATE NOT NULL,
+        "game_level" VARCHAR(20) NOT NULL DEFAULT '中',
+        "week_best_score" INTEGER DEFAULT 0
       );
     `
   );
+  await ensureColumn('week_record_table', 'game_level', "VARCHAR(20) NOT NULL DEFAULT '中'");
+  await ensureColumn('week_record_table', 'week_best_score', "INTEGER DEFAULT 0");
 
   await ensureTable(
     'user_information_table',
@@ -128,10 +194,14 @@ async function initDB() {
         "year_sum_score" INTEGER NOT NULL DEFAULT 0,
         "year_discussion_count" INTEGER NOT NULL DEFAULT 0,
         "year_average_score" DECIMAL(6,2) DEFAULT 0.00,
-        "target_year" DATE NOT NULL
+        "target_year" DATE NOT NULL,
+        "game_level" VARCHAR(20) NOT NULL DEFAULT '中',
+        "year_best_score" INTEGER DEFAULT 0
       );
     `
   );
+  await ensureColumn('year_record_table', 'game_level', "VARCHAR(20) NOT NULL DEFAULT '中'");
+  await ensureColumn('year_record_table', 'year_best_score', "INTEGER DEFAULT 0");
 
   await ensureTable(
     'month_record_table',
@@ -142,12 +212,73 @@ async function initDB() {
         "month_sum_score" INTEGER NOT NULL DEFAULT 0,
         "month_discussion_count" INTEGER NOT NULL DEFAULT 0,
         "month_average_score" DECIMAL(6,2) DEFAULT 0.00,
-        "target_month" DATE NOT NULL
+        "target_month" DATE NOT NULL,
+        "game_level" VARCHAR(20) NOT NULL DEFAULT '中',
+        "month_best_score" INTEGER DEFAULT 0
       );
     `
   );
+  await ensureColumn('month_record_table', 'game_level', "VARCHAR(20) NOT NULL DEFAULT '中'");
+  await ensureColumn('month_record_table', 'month_best_score', "INTEGER DEFAULT 0");
+
+  // 重複防止のためのUNIQUE制約の追加 (JIT更新用)
+  try {
+    await pool.query('ALTER TABLE "week_record_table" ADD CONSTRAINT "unique_week_record" UNIQUE ("user_ID", "target_week", "game_level")');
+  } catch (e) { /* すでに存在する場合は無視 */ }
+  try {
+    await pool.query('ALTER TABLE "month_record_table" ADD CONSTRAINT "unique_month_record" UNIQUE ("user_ID", "target_month", "game_level")');
+  } catch (e) { /* すでに存在する場合は無視 */ }
+  try {
+    await pool.query('ALTER TABLE "year_record_table" ADD CONSTRAINT "unique_year_record" UNIQUE ("user_ID", "target_year", "game_level")');
+  } catch (e) { /* すでに存在する場合は無視 */ }
 
   console.log('[DB] 初期化チェックが完了しました');
+
+  // バックフィル処理: 既存の 'completed' レコードを勝敗に変換
+  try {
+    await pool.query(`
+      UPDATE "log_table"
+      SET "game_result" = CASE 
+        WHEN "sum_score" > 50 THEN '勝利'
+        WHEN "sum_score" = 50 THEN '引き分け'
+        ELSE '敗北'
+      END
+      WHERE "game_result" = 'completed'
+    `);
+    console.log('[DB] 既存の完了データを勝敗ステータスに変換しました');
+  } catch (err) {
+    console.error('[DB] バックフィル変換中にエラーが発生しました:', err.message);
+  }
+
+  // user_information_table のレコード作成と統計の同期
+  try {
+    const allUsers = await pool.query('SELECT "user_ID" FROM "user_table"');
+    
+    for (const row of allUsers.rows) {
+      const id = row.user_ID || row.user_id;
+      
+      // レコードがなければ作成
+      await pool.query(`
+        INSERT INTO "user_information_table" ("user_ID", "average_score", "general_score", "winning_rate", "discussions_count", "best_score", "mbti_total")
+        VALUES ($1, 0, 0, 0.00, 0, 0, 'UNKN')
+        ON CONFLICT ("user_ID") DO NOTHING
+      `, [id]);
+
+      // 最新の統計情報で同期
+      await pool.query(`
+        UPDATE "user_information_table"
+        SET 
+          "average_score" = (SELECT COALESCE(ROUND(AVG("sum_score")), 0) FROM "log_table" WHERE "user_ID" = $1 AND "game_result" IN ('勝利', '敗北', '引き分け')),
+          "discussions_count" = (SELECT COUNT(*) FROM "log_table" WHERE "user_ID" = $1 AND "game_result" IN ('勝利', '敗北', '引き分け')),
+          "best_score" = (SELECT COALESCE(MAX("sum_score"), 0) FROM "log_table" WHERE "user_ID" = $1 AND "game_result" IN ('勝利', '敗北', '引き分け'))
+        WHERE "user_ID" = $1
+      `, [id]);
+      
+      console.log(`[DB] ユーザーID ${id} の統計情報を同期しました`);
+    }
+  } catch (err) {
+    console.error('[DB] 統計情報の同期中にエラーが発生しました:', err.message);
+  }
 }
 
 function parseEvaluation(text) {
@@ -237,13 +368,44 @@ app.post('/api/register', async (req, res) => {
     if (exists.rowCount > 0) return res.status(409).json({ error: 'username already exists' });
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const result = await pool.query(
-      'INSERT INTO "user_table" ("name", "password", "icon") VALUES ($1, $2, $3) RETURNING "user_ID", "name"',
-      [username, passwordHash, icon || 'icon1']
-    );
-    return res.json({ user: result.rows[0] });
+    
+    // トランザクションの開始
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      const result = await client.query(
+        'INSERT INTO "user_table" ("name", "password", "icon") VALUES ($1, $2, $3) RETURNING "user_ID", "name"',
+        [username, passwordHash, icon || 'icon1']
+      );
+      
+      const newUser = result.rows[0];
+      const targetUserID = newUser.user_ID || newUser.user_id;
+      console.log(`[REGISTER] user_table 挿入成功. ID: ${targetUserID}`, newUser);
+
+      if (!targetUserID) {
+        throw new Error('ユーザーIDを取得できませんでした。');
+      }
+
+      // user_information_table にも初期データを挿入
+      await client.query(
+        `INSERT INTO "user_information_table" (
+          "user_ID", "average_score", "general_score", "winning_rate", "discussions_count", "best_score", "mbti_total"
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [targetUserID, 0, 0, 0.00, 0, 0, 'UNKN']
+      );
+      console.log(`[REGISTER] user_information_table 初期レコード作成成功: user_ID=${targetUserID}`);
+
+      await client.query('COMMIT');
+      return res.json({ user: newUser });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (error) {
-    console.error(error);
+    console.error('[REGISTER] エラー発生:', error);
     return res.status(500).json({ error: 'failed to register user' });
   }
 });
@@ -467,7 +629,7 @@ app.post('/api/debate/end', async (req, res) => {
       console.log(`AI Evaluation (${difficulty}):`, evaluationText);
     } catch (geminiError) {
       console.error('--- Gemini API 呼び出し失敗 ---');
-      evaluationText = ['論理性: 15','根拠: 10','反論力: 10','一貫性: 5','説得力: 5','表現力: 5','MBTI: INTP'].join('\n');
+      evaluationText = ['論理性: 30','根拠: 10','反論力: 10','一貫性: 5','説得力: 5','表現力: 5','MBTI: INTP'].join('\n');
     }
 
     // 数値を抽出（parseEvaluationは既存のものを使用）
@@ -483,9 +645,11 @@ app.post('/api/debate/end', async (req, res) => {
     } = parseEvaluation(evaluationText);
 
     // DB更新処理
+    const resultStatus = score > 50 ? '勝利' : (score === 50 ? '引き分け' : '敗北');
+
     await pool.query(
       'UPDATE "log_table" SET "sum_score" = $2, "mbti" = $3, "game_result" = $4 WHERE "discussions_ID" = $1',
-      [debateId, score, mbti, 'completed']
+      [debateId, score, mbti, resultStatus]
     );
 
     await pool.query(
@@ -499,6 +663,58 @@ app.post('/api/debate/end', async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [debateId, debate.user_ID, logicScore, evidenceScore, rebuttalScore, consistencyScore, persuasionScore, expressionScore, score]
     );
+
+    // --- user_information_table の統計情報を更新 ---
+    await pool.query(`
+      UPDATE "user_information_table"
+      SET 
+        "average_score" = (SELECT COALESCE(ROUND(AVG("sum_score")), 0) FROM "log_table" WHERE "user_ID" = $1 AND "game_result" IN ('勝利', '敗北', '引き分け')),
+        "discussions_count" = (SELECT COUNT(*) FROM "log_table" WHERE "user_ID" = $1 AND "game_result" IN ('勝利', '敗北', '引き分け')),
+        "best_score" = (SELECT COALESCE(MAX("sum_score"), 0) FROM "log_table" WHERE "user_ID" = $1 AND "game_result" IN ('勝利', '敗北', '引き分け')),
+        "mbti_total" = $2
+      WHERE "user_ID" = $1
+    `, [debate.user_ID, mbti]);
+
+    // --- 期間別記録テーブル (Week, Month, Year) のJIT更新 ---
+    try {
+      const now = new Date();
+      
+      // 直近の月曜日を計算
+      const day = now.getDay();
+      const diffToMonday = (day === 0 ? -6 : 1) - day;
+      const targetWeek = new Date(now);
+      targetWeek.setDate(now.getDate() + diffToMonday);
+      targetWeek.setHours(0, 0, 0, 0);
+
+      // 月初
+      const targetMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      // 年初
+      const targetYear = new Date(now.getFullYear(), 0, 1);
+
+      const gameLevel = difficulty; // 弱, 中, 強
+
+      // 各テーブルを更新 (UPSERT)
+      const upsertRecord = async (tableName, dateCol, dateVal, prefix) => {
+        await pool.query(`
+          INSERT INTO "${tableName}" ("user_ID", "${dateCol}", "game_level", "${prefix}_sum_score", "${prefix}_discussion_count", "${prefix}_best_score")
+          VALUES ($1, $2, $3, $4, 1, $4)
+          ON CONFLICT ("user_ID", "${dateCol}", "game_level") 
+          DO UPDATE SET 
+            "${prefix}_sum_score" = "${tableName}"."${prefix}_sum_score" + EXCLUDED."${prefix}_sum_score",
+            "${prefix}_discussion_count" = "${tableName}"."${prefix}_discussion_count" + 1,
+            "${prefix}_average_score" = (("${tableName}"."${prefix}_sum_score" + EXCLUDED."${prefix}_sum_score")::numeric / ("${tableName}"."${prefix}_discussion_count" + 1)),
+            "${prefix}_best_score" = GREATEST("${tableName}"."${prefix}_best_score", EXCLUDED."${prefix}_best_score")
+        `, [debate.user_ID, dateVal, gameLevel, score]);
+      };
+
+      await upsertRecord('week_record_table', 'target_week', targetWeek, 'week');
+      await upsertRecord('month_record_table', 'target_month', targetMonth, 'month');
+      await upsertRecord('year_record_table', 'target_year', targetYear, 'year');
+
+    } catch (jitErr) {
+      console.error('[JIT] 期間別統計の更新に失敗しました:', jitErr.message);
+    }
 
     return res.json({ debate: { id: Number(debateId), score, mbti, summary: evaluationText } });
   } catch (error) {
@@ -516,10 +732,10 @@ app.get('/api/users/:username', async (req, res) => {
     const user = userResult.rows[0];
     const stats = await pool.query(
       `SELECT
-        COUNT(*) FILTER (WHERE "game_result" = 'completed')::int AS debates_count,
-        COALESCE(ROUND(AVG("sum_score"))::int, 0) AS average_score,
-        COALESCE(MAX("sum_score"), 0) AS best_score
-      FROM "log_table"
+        "discussions_count" AS debates_count,
+        "average_score",
+        "best_score"
+      FROM "user_information_table"
       WHERE "user_ID" = $1`,
       [user.user_ID]
     );
@@ -584,47 +800,67 @@ app.get('/api/health', async (_req, res) => {
 
 app.get('/api/ranking', async (req, res) => {
   try {
-    // 過去1年分（年ランキング用）の完了済みデータを一括取得
-    const query = `
-      SELECT u.name, l.theme, l.sum_score, l.mbti, l.date_time
-      FROM "log_table" l
-      JOIN "user_table" u ON l."user_ID" = u."user_ID"
-      WHERE l.game_result = 'completed'
-      AND l.date_time >= NOW() - INTERVAL '1 year'
-      ORDER BY l.sum_score DESC
-    `;
-    const result = await pool.query(query);
-    const allData = result.rows;
+    // 期間別・難易度別のトップ10を取得する共通関数
+    const getTopRank = async (tableName, dateCol, countCol, scoreCol, avgCol, gameLevel, limitCount, bestCol) => {
+      // 基準日（最新の記録日）を取得
+      const latestDateRes = await pool.query(`SELECT MAX("${dateCol}") as max_date FROM "${tableName}" WHERE "game_level" = $1`, [gameLevel]);
+      const latestDate = latestDateRes.rows[0].max_date;
+      if (!latestDate) return [];
 
-    // フィルタリング用ヘルパー関数
-    const filterData = (diffKeyword, days) => {
-      let filtered = allData;
-      
-      // 難易度でフィルタ
-      if (diffKeyword === '中') {
-        filtered = filtered.filter(r => r.theme.includes('[中]') || (!r.theme.includes('[弱]') && !r.theme.includes('[強]')));
-      } else {
-        filtered = filtered.filter(r => r.theme.includes(`[${diffKeyword}]`));
-      }
-
-      // 期間でフィルタ
-      if (days !== 'year') {
-        const limit = new Date();
-        limit.setDate(limit.getDate() - (days === 'week' ? 7 : 30));
-        filtered = filtered.filter(r => new Date(r.date_time) >= limit);
-      }
-      
-      return filtered.slice(0, 10); // 上位10件を返す
+      const query = `
+        SELECT 
+          u.name, 
+          u.icon,
+          r."${avgCol}" as avg_score, 
+          r."${countCol}" as count,
+          r."${bestCol}" as best_score,
+          (
+            SELECT l."mbti" 
+            FROM "log_table" l 
+            WHERE l."user_ID" = r."user_ID" 
+            AND l."game_result" IN ('勝利', '敗北', '引き分け')
+            ORDER BY l."date_time" DESC LIMIT 1
+          ) as mbti
+        FROM "${tableName}" r
+        JOIN "user_table" u ON r."user_ID" = u."user_ID"
+        WHERE r."game_level" = $1 
+        AND r."${dateCol}" = $2
+        AND r."${countCol}" >= $3
+        ORDER BY r."${avgCol}" DESC
+        LIMIT 10
+      `;
+      const res = await pool.query(query, [gameLevel, latestDate, limitCount]);
+      return res.rows.map(row => ({
+        name: row.name,
+        icon: row.icon,
+        sum_score: Math.round(row.avg_score), // フロントエンドの互換性のため sum_score 名義で平均を送る
+        best_score: row.best_score || 0,
+        mbti: row.mbti || '---',
+        count: row.count
+      }));
     };
 
-    // レスポンス構造の作成
-    res.json({
-      easy: { week: filterData('弱', 'week'), month: filterData('弱', 'month'), year: filterData('弱', 'year') },
-      normal: { week: filterData('中', 'week'), month: filterData('中', 'month'), year: filterData('中', 'year') },
-      hard: { week: filterData('強', 'week'), month: filterData('強', 'month'), year: filterData('強', 'year') }
-    });
+    const rankingData = {
+      easy: {
+        week: await getTopRank('week_record_table', 'target_week', 'week_discussion_count', 'week_sum_score', 'week_average_score', '弱', 5, 'week_best_score'),
+        month: await getTopRank('month_record_table', 'target_month', 'month_discussion_count', 'month_sum_score', 'month_average_score', '弱', 10, 'month_best_score'),
+        year: await getTopRank('year_record_table', 'target_year', 'year_discussion_count', 'year_sum_score', 'year_average_score', '弱', 50, 'year_best_score')
+      },
+      normal: {
+        week: await getTopRank('week_record_table', 'target_week', 'week_discussion_count', 'week_sum_score', 'week_average_score', '中', 5, 'week_best_score'),
+        month: await getTopRank('month_record_table', 'target_month', 'month_discussion_count', 'month_sum_score', 'month_average_score', '中', 10, 'month_best_score'),
+        year: await getTopRank('year_record_table', 'target_year', 'year_discussion_count', 'year_sum_score', 'year_average_score', '中', 50, 'year_best_score')
+      },
+      hard: {
+        week: await getTopRank('week_record_table', 'target_week', 'week_discussion_count', 'week_sum_score', 'week_average_score', '強', 5, 'week_best_score'),
+        month: await getTopRank('month_record_table', 'target_month', 'month_discussion_count', 'month_sum_score', 'month_average_score', '強', 10, 'month_best_score'),
+        year: await getTopRank('year_record_table', 'target_year', 'year_discussion_count', 'year_sum_score', 'year_average_score', '強', 50, 'year_best_score')
+      }
+    };
+
+    res.json(rankingData);
   } catch (error) {
-    console.error(error);
+    console.error('[RANKING] エラー:', error);
     res.status(500).json({ error: 'Ranking failed' });
   }
 });
@@ -633,30 +869,30 @@ app.get('/api/ranking/debug', (_req, res) => {
   res.json({ ok: true, route: '/api/ranking' });
 });
 
-// server.js の例
-app.get('/api/user/stats/:username', (req, res) => {
-  const userId = req.params.userId;
-  
-  // データベース（NeDBなど）からそのユーザーの全履歴を取得
-  db.find({ userId: userId }, (err, docs) => {
-    if (err || docs.length === 0) {
+// 統計情報取得API
+app.get('/api/user/stats/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const userResult = await pool.query('SELECT "user_ID" FROM "user_table" WHERE "name" = $1', [username]);
+    if (userResult.rowCount === 0) return res.status(404).json({ error: 'user not found' });
+
+    const userId = userResult.rows[0].user_ID;
+    const stats = await pool.query(
+      `SELECT "average_score" AS "avgScore", "mbti_total" AS "estimatedMbti"
+       FROM "user_information_table"
+       WHERE "user_ID" = $1`,
+      [userId]
+    );
+
+    if (stats.rowCount === 0) {
       return res.json({ avgScore: 0, estimatedMbti: "---" });
     }
 
-    // 平均スコアの計算
-    const totalScore = docs.reduce((sum, doc) => sum + Number(doc.score), 0);
-    const avgScore = Math.round(totalScore / docs.length);
-
-    // 最新のMBTIを取得（または最も多いタイプを集計）
-    // ここでは一番新しい履歴のMBTIを返すと仮定
-    const latestDoc = docs.sort((a, b) => b.timestamp - a.timestamp)[0];
-    const estimatedMbti = latestDoc.mbti || "---";
-
-    res.json({
-      avgScore: avgScore,
-      estimatedMbti: estimatedMbti
-    });
-  });
+    return res.json(stats.rows[0]);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'failed to fetch stats' });
+  }
 });
 
 initDB()
