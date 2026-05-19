@@ -18,16 +18,11 @@ const backgrounds = {
   'history-screen': 'url("back_png/back_02.jpg")'
 };
 
-/* =========================================
-   アイコン画像設定
-   ここに画像パスを入力してください
-========================================= */
-
 const iconData = {
 
   icon1: {
-    menu: "icon_png/01_hiyoko.png", // ←右上アイコン画像
-    character: "icon_png/02_hiyoko.png" // ←チャット画面画像
+    menu: "icon_png/01_hiyoko.png", 
+    character: "icon_png/02_hiyoko.png"
   },
 
   icon2: {
@@ -90,7 +85,6 @@ function updateUserIDDisplay(userId) {
       menuId.innerText = `${userId} さん`;
     }
 
-    // アイコン変更
     if (userIcon && iconData[currentUserIcon]) {
       userIcon.src = iconData[currentUserIcon].menu;
     }
@@ -101,7 +95,6 @@ function updateUserIDDisplay(userId) {
       badge.style.display = 'none';
     }
 
-    // アイコンをリセット
     if (userIcon) {
       userIcon.src = "";
     }
@@ -190,8 +183,6 @@ function logout() {
 
   currentUser = null;
   currentDebateId = null;
-
-  // アイコン状態も初期化
   currentUserIcon = "icon1";
 
   updateUserIDDisplay(null);
@@ -276,10 +267,8 @@ async function startGame(stance) {
   gameData.turn = gameData.maxTurn;
   gameData.isWaiting = false;
 
-  // --- 追加：難易度の取得 ---
   const difficultyElement = document.querySelector('input[name="difficulty"]:checked');
   const difficulty = difficultyElement ? difficultyElement.value : '中';
-  // -----------------------
 
   const themeText = document.getElementById('themeText');
   if (themeText) themeText.innerText = `テーマ: ${gameData.theme}`;
@@ -296,7 +285,6 @@ async function startGame(stance) {
 
   showScreen('gameScreen');
 
-  // ユーザーキャラ画像変更
   const userImg = document.getElementById('userImg');
   if (userImg && iconData[currentUserIcon]) {
     userImg.src = iconData[currentUserIcon].character;
@@ -315,7 +303,7 @@ async function startGame(stance) {
         username: currentUser, 
         theme: gameData.theme, 
         stance,
-        difficulty: difficulty // ★ ここに difficulty を追加！
+        difficulty: difficulty
       })
     });
     const data = await res.json();
@@ -331,17 +319,14 @@ async function startGame(stance) {
 }
 
 async function handleStartBattle() {
-  const currentUsername = localStorage.getItem('username'); // 保存されているユーザー名
+  const currentUsername = localStorage.getItem('username'); 
   const selectedTheme = document.getElementById('themeTitle').innerText;
   
-  // 立場（ボタンの選択状態などから取得）
   const selectedStance = document.querySelector('.stance-btn.active')?.innerText || "未選択";
 
-  // --- ここで難易度を取得 ---
   const difficultyElement = document.querySelector('input[name="difficulty"]:checked');
   const difficulty = difficultyElement ? difficultyElement.value : "中"; 
 
-  // サーバーへ送信
   try {
     const response = await fetch('/api/debate/start', {
       method: 'POST',
@@ -350,13 +335,12 @@ async function handleStartBattle() {
         username: currentUsername,
         theme: selectedTheme,
         stance: selectedStance,
-        difficulty: difficulty // 難易度を送信！
+        difficulty: difficulty
       })
     });
 
     const data = await response.json();
     if (response.ok) {
-      // 画面を対戦画面に切り替える処理など
       console.log("討論開始！ ID:", data.debate.id);
       showScreen('debate-screen'); 
     } else {
@@ -464,12 +448,10 @@ async function showResult() {
       const score = data.debate?.score ?? 0;
       scoreText.innerText = `${score}点`;
 
-      // ★ 勝敗表示
       const outcomeEl = document.getElementById('resultOutcome');
 
       if (outcomeEl) {
 
-        // 初期化
         outcomeEl.className = 'result-outcome';
 
         if (score <= 49) {
@@ -518,16 +500,12 @@ async function showHistory() {
     /* =========================
       プロフィール表示更新 (追加・修正)
     ========================= */
-
-    // ユーザー名
     document.getElementById('mypageUserId').innerText = currentUser + "さん";
 
-    // アイコン
     if (iconData[currentUserIcon]) {
       document.getElementById('mypageIcon').src = iconData[currentUserIcon].menu;
     }
 
-    // --- 【修正】統計（平均スコアとMBTI）をサーバーから取得して反映 ---
     try {
       const statsRes = await fetch(`/api/user/stats/${encodeURIComponent(currentUser)}`);
       if (statsRes.ok) {
@@ -573,7 +551,6 @@ async function showHistory() {
 
             const text = String(m.content || "");
 
-            // ★ここが重要：contentから判定する
             const isUser =
               text.startsWith("USER:") ||
               text.startsWith("User:") ||
@@ -581,7 +558,6 @@ async function showHistory() {
 
             const type = isUser ? "user" : "ai";
 
-            // 表示用にラベルを消す
             const cleanText = text
               .replace(/^USER:\s*/i, "")
               .replace(/^AI:\s*/i, "");
@@ -619,20 +595,17 @@ async function showHistory() {
   }
 }
 
-let currentDiff = 'easy'; // 現在選択されている難易度を保存
-let cachedRankingData = null; // サーバーデータを保存
+let currentDiff = 'easy';
+let cachedRankingData = null;
 
-// ランキング表示
 async function showRanking() {
     showScreen('ranking-screen');
-    await updateRankingList(true); // 画面を開くときはサーバーから取得
+    await updateRankingList(true);
 }
 
-// 難易度ボタンが押された時の動作
 function changeDiffTab(diff) {
-    currentDiff = diff; // 選択された難易度（easy/normal/hard）を保存
-    
-    // 全ボタンから active クラスを消し、押されたボタンだけに付ける
+    currentDiff = diff;
+
     document.querySelectorAll('.diff-tab').forEach(btn => {
         btn.classList.remove('active');
         if (btn.getAttribute('onclick').includes(`'${diff}'`)) {
@@ -640,7 +613,6 @@ function changeDiffTab(diff) {
         }
     });
 
-    // タイトルの更新
     const titleElem = document.getElementById('currentRankTitle');
     const titles = { easy: ' 弱モード', normal: ' 中モード', hard: ' 強モード' };
     if (titleElem) {
@@ -648,11 +620,9 @@ function changeDiffTab(diff) {
         titleElem.className = `rank-title rank-${diff}`;
     }
 
-    // 表示を更新
     updateRankingList(false);
 }
 
-// データの取得と反映
 async function updateRankingList(forceFetch = false) {
     try {
         if (!cachedRankingData || forceFetch) {
@@ -660,13 +630,10 @@ async function updateRankingList(forceFetch = false) {
             cachedRankingData = await res.json();
         }
 
-        // HTMLから選択中の「期間」を取得
         const period = document.getElementById('rankingPeriod').value;
-        
-        // 選択中の「難易度」と「期間」でデータを抽出
+
         const list = cachedRankingData[currentDiff][period];
         
-        // メインテーブルに描画
         renderTable('rankingTableMain', list);
 
     } catch (error) {
@@ -719,19 +686,25 @@ function openModal(msg, confirmText, cancelText, cb) {
   const msgElem = document.getElementById('modalMessage');
   const confirmBtn = document.getElementById('modalConfirm');
   const cancelBtn = document.getElementById('modalCancel');
+
   if (!modal || !msgElem) return;
 
-  msgElem.innerText = msg;
+  msgElem.innerHTML = msg;
+
   confirmBtn.innerText = confirmText;
   cancelBtn.innerText = cancelText;
+
   cancelBtn.style.display = 'inline-block';
 
   modalCallback = cb;
+
   confirmBtn.onclick = () => {
     if (modalCallback) modalCallback();
     closeModal();
   };
+
   cancelBtn.onclick = closeModal;
+
   modal.style.display = 'flex';
 }
 
@@ -802,15 +775,12 @@ window.onclick = function (event) {
 
 function selectIcon(element) {
 
-  // 選択状態を全部解除
   document.querySelectorAll('.selectable-icon').forEach((icon) => {
     icon.classList.remove('selected');
   });
 
-  // 押したものを選択状態に
   element.classList.add('selected');
 
-  // data-icon を保存
   selectedIcon = element.dataset.icon;
 }
 
@@ -819,15 +789,12 @@ async function updatePlayerStats(username) {
         const response = await fetch(`/api/user/stats/${username}`);
         const data = await response.json();
 
-        // HTMLの要素（画像3枚目の右側パネル）を書き換える
-        // 推定MBTIの表示場所 (例: id="estimatedMbti")
         const mbtiElement = document.getElementById('estimatedMbti');
         if (mbtiElement) {
             mbtiElement.innerText = data.estimatedMbti;
-            mbtiElement.style.color = "#ff4d6d"; // 強調色
+            mbtiElement.style.color = "#ff4d6d"; 
         }
 
-        // 平均スコアの表示場所 (例: id="averageScore")
         const scoreElement = document.getElementById('averageScore');
         if (scoreElement) {
             scoreElement.innerText = `${data.avgScore} 点`;
@@ -837,24 +804,20 @@ async function updatePlayerStats(username) {
     }
 }
 
-// 履歴画面を表示する関数の中で呼び出す
 async function loadDashboard(username) {
     try {
         const response = await fetch(`/api/user/stats/${username}`);
         const data = await response.json();
 
-        // 取得したデータを画面に反映
         document.getElementById('estimatedMbti').innerText = data.estimatedMbti;
         document.getElementById('averageScore').innerText = `${data.avgScore} 点`;
         
-        // その後、既存の履歴一覧（画像3枚目の左側）をロードする処理を続ける...
     } catch (error) {
         console.error("統計データのロード失敗:", error);
     }
 }
 
 async function refreshStats() {
-    // ローカルストレージなどからログイン中のユーザー名を取得
     const username = localStorage.getItem('username'); 
     if (!username) return;
 
@@ -862,11 +825,9 @@ async function refreshStats() {
         const response = await fetch(`/api/user/stats/${username}`);
         const data = await response.json();
 
-        // HTML側のID「mypageMbti」を書き換える
         const mbtiElem = document.getElementById('mypageMbti');
         if (mbtiElem) mbtiElem.innerText = data.estimatedMbti;
 
-        // HTML側のID「mypageAverage」を書き換える
         const avgElem = document.getElementById('mypageAverage');
         if (avgElem) avgElem.innerText = data.avgScore;
         
@@ -876,19 +837,16 @@ async function refreshStats() {
     }
 }
 
-// サーバーから取得したデータをHTMLに反映させる処理
 async function updateMyPageStats(username) {
   try {
     const response = await fetch(`/api/user/stats/${username}`);
     const data = await response.json();
 
-    // HTMLの id="mypageMbti" に値をセット
     const mbtiElement = document.getElementById('mypageMbti');
     if (mbtiElement) {
       mbtiElement.innerText = data.estimatedMbti; 
     }
 
-    // HTMLの id="mypageAverage" に値をセット
     const avgElement = document.getElementById('mypageAverage');
     if (avgElement) {
       avgElement.innerText = data.avgScore;
