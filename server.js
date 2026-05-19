@@ -5,7 +5,7 @@ const path = require('path');
 if (!fs.existsSync('.env')) {
   const envTemplate = `DATABASE_URL=postgres://postgres:password@localhost:5432/debate_db
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-2.5-flash
 `;
   fs.writeFileSync('.env', envTemplate);
   console.log('[ENV] .env ファイルが見つかりませんでした。テンプレートを作成しました。必要に応じて設定を編集してください。');
@@ -25,7 +25,7 @@ app.use(express.static(__dirname));
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
 async function initDB() {
   const connectionString = process.env.DATABASE_URL;
@@ -814,15 +814,10 @@ app.get('/api/ranking', async (req, res) => {
           r."${avgCol}" as avg_score, 
           r."${countCol}" as count,
           r."${bestCol}" as best_score,
-          (
-            SELECT l."mbti" 
-            FROM "log_table" l 
-            WHERE l."user_ID" = r."user_ID" 
-            AND l."game_result" IN ('勝利', '敗北', '引き分け')
-            ORDER BY l."date_time" DESC LIMIT 1
-          ) as mbti
+          i."mbti_total" as mbti
         FROM "${tableName}" r
         JOIN "user_table" u ON r."user_ID" = u."user_ID"
+        LEFT JOIN "user_information_table" i ON r."user_ID" = i."user_ID"
         WHERE r."game_level" = $1 
         AND r."${dateCol}" = $2
         AND r."${countCol}" >= $3
